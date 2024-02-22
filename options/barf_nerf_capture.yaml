@@ -1,0 +1,10 @@
+_parent_: options/barf_llff.yaml
+
+data:                                                       # data options
+    root: "/home/bagro/CSC2530GroupProject/data/"
+    dataset: nerf_capture                                   # dataset name
+    scene: "240216172823"                                   # scene name
+    image_size: [1440,1920]                                 # input image sizes [height,width]
+
+nerf:
+  rand_rays: 1024                                         # number of random rays for each step
