@@ -223,13 +223,18 @@ def angle_to_rotation_matrix(a,axis):
     M = M.roll((roll,roll),dims=(-2,-1))
     return M
 
-def get_center_and_ray(opt,pose,intr=None): # [HW,2]
+def get_center_and_ray(opt, pose, intr=None, device=None): # [HW,2]
     # given the intrinsic/extrinsic matrices, get the camera center and ray directions]
+    if device is None:
+        device = opt.device
+    pose = pose.to(device)
+    if intr is not None:
+        intr = intr.to(device)
     assert(opt.camera.model=="perspective")
     with torch.no_grad():
         # compute image coordinate grid
-        y_range = torch.arange(opt.H,dtype=torch.float32,device=opt.device).add_(0.5)
-        x_range = torch.arange(opt.W,dtype=torch.float32,device=opt.device).add_(0.5)
+        y_range = torch.arange(opt.H,dtype=torch.float32,device=device).add_(0.5)
+        x_range = torch.arange(opt.W,dtype=torch.float32,device=device).add_(0.5)
         Y,X = torch.meshgrid(y_range,x_range) # [H,W]
         xy_grid = torch.stack([X,Y],dim=-1).view(-1,2) # [HW,2]
     # compute center and ray
@@ -238,7 +243,7 @@ def get_center_and_ray(opt,pose,intr=None): # [HW,2]
     grid_3D = img2cam(to_hom(xy_grid),intr) # [B,HW,3]
     center_3D = torch.zeros_like(grid_3D) # [B,HW,3]
     # transform from camera to world coordinates
-    grid_3D = cam2world(grid_3D,pose) # [B,HW,3]
+    grid_3D = cam2world(grid_3D,pose) # [B,HW,3] 
     center_3D = cam2world(center_3D,pose) # [B,HW,3]
     ray = grid_3D-center_3D # [B,HW,3]
     return center_3D,ray

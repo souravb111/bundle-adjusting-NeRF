@@ -8,3 +8,7 @@ data:                                                       # data options
 
 nerf:
   rand_rays: 1024                                         # number of random rays for each step
+
+freq:
+  vis: 50000
+  val: 50000

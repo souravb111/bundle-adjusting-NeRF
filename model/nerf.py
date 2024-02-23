@@ -52,11 +52,20 @@ class Model(base.Model):
         self.ep = 0 # dummy for timer
         # training
         if self.iter_start==0: self.validate(opt,0)
+
+        # pre-compute rays for training:
         loader = tqdm.trange(opt.max_iter,desc="training",leave=False)
+        var = self.train_data.all
+        pose = self.graph.get_pose(opt,var,mode="train")
+        center,ray = camera.get_center_and_ray(opt, pose, intr=var.intr, device="cpu") # [B,HW,3]
+        while ray.isnan().any(): # TODO: weird bug, ray becomes NaN arbitrarily if batch_size>1, not deterministic reproducible
+            center,ray = camera.get_center_and_ray(opt, pose, intr=var.intr, device="cpu") # [B,HW,3]
+        self.graph.center = center 
+        self.graph.ray = ray
+
         for self.it in loader:
             if self.it<self.iter_start: continue
             # set var to all available images
-            var = self.train_data.all
             self.train_iteration(opt,var,loader)
             if opt.optim.sched: self.sched.step()
             if self.it%opt.freq.val==0: self.validate(opt,self.it)
@@ -231,12 +240,18 @@ class Graph(base.Graph):
 
     def render(self,opt,pose,intr=None,ray_idx=None,mode=None):
         batch_size = len(pose)
-        center,ray = camera.get_center_and_ray(opt,pose,intr=intr) # [B,HW,3]
-        while ray.isnan().any(): # TODO: weird bug, ray becomes NaN arbitrarily if batch_size>1, not deterministic reproducible
-            center,ray = camera.get_center_and_ray(opt,pose,intr=intr) # [B,HW,3]
+        
+        if mode == "train":
+            center, ray = self.center, self.ray
+        else:
+            center,ray = camera.get_center_and_ray(opt, pose, intr=intr, device="cpu") # [B,HW,3]
+            while ray.isnan().any(): # TODO: weird bug, ray becomes NaN arbitrarily if batch_size>1, not deterministic reproducible
+                center,ray = camera.get_center_and_ray(opt, pose, intr=intr, device="cpu") # [B,HW,3]
+            
         if ray_idx is not None:
             # consider only subset of rays
-            center,ray = center[:,ray_idx],ray[:,ray_idx]
+            center,ray = center[:,ray_idx.to("cpu")],ray[:,ray_idx.to("cpu")]
+        center, ray = center.to(opt.device), ray.to(opt.device)
         if opt.camera.ndc:
             # convert center/ray representations to NDC
             center,ray = camera.convert_NDC(opt,center,ray,intr=intr)
