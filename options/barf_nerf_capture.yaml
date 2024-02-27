@@ -3,7 +3,7 @@ _parent_: options/barf_llff.yaml
 data:                                                       # data options
     root: "/home/bagro/CSC2530GroupProject/data/"
     dataset: nerf_capture                                   # dataset name
-    scene: "240227123323"                                   # scene name
+    scene: "chair_data"                                     # scene name
     image_size: [1440,1920]                                 # input image sizes [height,width]
 
 nerf:
