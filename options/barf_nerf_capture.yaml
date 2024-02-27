@@ -10,5 +10,5 @@ nerf:
   rand_rays: 1024                                         # number of random rays for each step
 
 freq:
-  vis: 5000
-  val: 5000
+  vis: 50000
+  val: 50000

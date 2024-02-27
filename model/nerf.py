@@ -51,7 +51,7 @@ class Model(base.Model):
         self.graph.train()
         self.ep = 0 # dummy for timer
         # training
-        if self.iter_start==0: self.validate(opt,0)
+        # if self.iter_start==0: self.validate(opt,0)
 
         # pre-compute rays for training:
         loader = tqdm.trange(opt.max_iter,desc="training",leave=False)
