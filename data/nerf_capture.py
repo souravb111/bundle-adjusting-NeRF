@@ -43,7 +43,7 @@ class Dataset(base.Dataset):
         self.all = torch.utils.data._utils.collate.default_collate([s for s in self])
 
     def get_all_camera_poses(self,opt):
-        pose_raw_all = [torch.tensor(f["transform_matrix"],dtype=torch.float32) for f in self.list]
+        pose_raw_all = [torch.tensor(f["transform_matrix"],dtype=torch.float32) for f in self.transforms]
         pose_canon_all = torch.stack([self.parse_raw_camera(opt,p) for p in pose_raw_all],dim=0)
         return pose_canon_all
 
