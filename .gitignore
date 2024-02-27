@@ -1,5 +1,6 @@
 output/
-data/
+data/blender/
+data/llff/
 __MACOSX/
 
 # Byte-compiled / optimized / DLL files

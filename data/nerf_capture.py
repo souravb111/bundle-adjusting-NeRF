@@ -43,8 +43,9 @@ class Dataset(base.Dataset):
         self.all = torch.utils.data._utils.collate.default_collate([s for s in self])
 
     def get_all_camera_poses(self,opt):
-        # poses are unknown, so just return some dummy poses (identity transform)
-        return camera.pose(t=torch.zeros(len(self),3))
+        pose_raw_all = [torch.tensor(f["transform_matrix"],dtype=torch.float32) for f in self.list]
+        pose_canon_all = torch.stack([self.parse_raw_camera(opt,p) for p in pose_raw_all],dim=0)
+        return pose_canon_all
 
     def __getitem__(self,idx):
         opt = self.opt
@@ -73,9 +74,15 @@ class Dataset(base.Dataset):
         fx = self.transforms[idx]["fl_x"]
         assert self.raw_H == self.transforms[idx]["h"]
         assert self.raw_W == self.transforms[idx]["w"]
-        transform_matrix = torch.tensor(self.transforms[idx]["transform_matrix"]).float()
         intr = torch.tensor([[fx,0,cx],
                              [0,fy,cy],
                              [0,0,1]]).float()
-        pose = camera.pose(R=transform_matrix[:3, :3], t=transform_matrix[:3, -1]) # dummy pose, won't be used
+        pose_raw = torch.tensor(self.transforms[idx]["transform_matrix"]).float()
+        pose = self.parse_raw_camera(opt,pose_raw)
         return intr, pose
+
+    def parse_raw_camera(self,opt,pose_raw):
+        pose_flip = camera.pose(R=torch.diag(torch.tensor([1,-1,-1])))
+        pose = camera.pose.compose([pose_flip,pose_raw[:3]])
+        pose = camera.pose.invert(pose)
+        return pose
