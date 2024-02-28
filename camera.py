@@ -223,7 +223,7 @@ def angle_to_rotation_matrix(a,axis):
     M = M.roll((roll,roll),dims=(-2,-1))
     return M
 
-def get_center_and_ray(opt, pose, intr=None, device=None): # [HW,2]
+def get_center_and_ray(opt, pose, ray_idx=None, intr=None, device=None): # [HW,2]
     # given the intrinsic/extrinsic matrices, get the camera center and ray directions]
     if device is None:
         device = opt.device
