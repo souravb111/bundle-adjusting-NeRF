@@ -237,6 +237,9 @@ def get_center_and_ray(opt, pose, ray_idx=None, intr=None, device=None): # [HW,2
         x_range = torch.arange(opt.W,dtype=torch.float32,device=device).add_(0.5)
         Y,X = torch.meshgrid(y_range,x_range) # [H,W]
         xy_grid = torch.stack([X,Y],dim=-1).view(-1,2) # [HW,2]
+
+    if ray_idx is not None:
+        xy_grid = xy_grid[ray_idx] # (num_rays, 2)
     # compute center and ray
     batch_size = len(pose)
     xy_grid = xy_grid.repeat(batch_size,1,1) # [B,HW,2]

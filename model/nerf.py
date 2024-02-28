@@ -244,9 +244,9 @@ class Graph(base.Graph):
         #if mode == "train":
             #center, ray = self.center, self.ray
         #else:
-        center,ray = camera.get_center_and_ray(opt, pose, ray_idx=ray_idx, intr=intr, device="cpu") # [B,HW,3]
+        center,ray = camera.get_center_and_ray(opt, pose, ray_idx=ray_idx, intr=intr, device="cuda") # [B,HW,3]
         while ray.isnan().any(): # TODO: weird bug, ray becomes NaN arbitrarily if batch_size>1, not deterministic reproducible
-            center,ray = camera.get_center_and_ray(opt, pose, ray_idx=ray_idx, intr=intr, device="cpu") # [B,HW,3]
+            center,ray = camera.get_center_and_ray(opt, pose, ray_idx=ray_idx, intr=intr, device="cuda") # [B,HW,3]
             
         # if ray_idx is not None:
         #     # consider only subset of rays
