@@ -56,12 +56,12 @@ class Model(base.Model):
         # pre-compute rays for training:
         loader = tqdm.trange(opt.max_iter,desc="training",leave=False)
         var = self.train_data.all
-        pose = self.graph.get_pose(opt,var,mode="train")
-        center,ray = camera.get_center_and_ray(opt, pose, intr=var.intr, device="cpu") # [B,HW,3]
-        while ray.isnan().any(): # TODO: weird bug, ray becomes NaN arbitrarily if batch_size>1, not deterministic reproducible
-            center,ray = camera.get_center_and_ray(opt, pose, intr=var.intr, device="cpu") # [B,HW,3]
-        self.graph.center = center 
-        self.graph.ray = ray
+        # pose = self.graph.get_pose(opt,var,mode="train")
+        # center,ray = camera.get_center_and_ray(opt, pose, intr=var.intr, device="cpu") # [B,HW,3]
+        # while ray.isnan().any(): # TODO: weird bug, ray becomes NaN arbitrarily if batch_size>1, not deterministic reproducible
+        #     center,ray = camera.get_center_and_ray(opt, pose, intr=var.intr, device="cpu") # [B,HW,3]
+        # self.graph.center = center 
+        # self.graph.ray = ray
 
         for self.it in loader:
             if self.it<self.iter_start: continue
@@ -241,17 +241,17 @@ class Graph(base.Graph):
     def render(self,opt,pose,intr=None,ray_idx=None,mode=None):
         batch_size = len(pose)
         
-        if mode == "train":
-            center, ray = self.center, self.ray
-        else:
-            center,ray = camera.get_center_and_ray(opt, pose, intr=intr, device="cpu") # [B,HW,3]
-            while ray.isnan().any(): # TODO: weird bug, ray becomes NaN arbitrarily if batch_size>1, not deterministic reproducible
-                center,ray = camera.get_center_and_ray(opt, pose, intr=intr, device="cpu") # [B,HW,3]
+        #if mode == "train":
+            #center, ray = self.center, self.ray
+        #else:
+        center,ray = camera.get_center_and_ray(opt, pose, ray_idx=ray_idx, intr=intr, device="cpu") # [B,HW,3]
+        while ray.isnan().any(): # TODO: weird bug, ray becomes NaN arbitrarily if batch_size>1, not deterministic reproducible
+            center,ray = camera.get_center_and_ray(opt, pose, ray_idx=ray_idx, intr=intr, device="cpu") # [B,HW,3]
             
-        if ray_idx is not None:
-            # consider only subset of rays
-            center,ray = center[:,ray_idx.to("cpu")],ray[:,ray_idx.to("cpu")]
-        center, ray = center.to(opt.device), ray.to(opt.device)
+        # if ray_idx is not None:
+        #     # consider only subset of rays
+        #     center,ray = center[:,ray_idx.to("cpu")],ray[:,ray_idx.to("cpu")]
+        # center, ray = center.to(opt.device), ray.to(opt.device)
         if opt.camera.ndc:
             # convert center/ray representations to NDC
             center,ray = camera.convert_NDC(opt,center,ray,intr=intr)
