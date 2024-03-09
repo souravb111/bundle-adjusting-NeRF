@@ -93,7 +93,7 @@ class Model(nerf.Model):
         # get ground-truth (canonical) camera poses
         pose_GT = self.train_data.get_all_camera_poses(opt).to(opt.device)
         # add synthetic pose perturbation to all training data
-        if opt.data.dataset=="blender":
+        if opt.data.dataset=="blender": # or opt.data.dataset=="colmap":
             pose = pose_GT
             if opt.camera.noise:
                 pose = camera.pose.compose([self.graph.pose_noise,pose])

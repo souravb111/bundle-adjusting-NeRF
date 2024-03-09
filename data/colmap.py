@@ -31,6 +31,9 @@ class Dataset(base.Dataset):
             self.transforms = json.load(f)
 
         # filter to only contain those images that exist on disk
+        if hasattr(opt.data, "subsample"):
+            self.transforms["frames"] = self.transforms["frames"][::opt.data.subsample]
+
         self.transforms["frames"] = [f for f in self.transforms["frames"] if os.path.exists(os.path.join(self.path_image, f["file_path"].split("/")[-1]))]
         self.list = [f["file_path"].split("/")[-1] for f in self.transforms["frames"]]
 
