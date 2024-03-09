@@ -30,11 +30,17 @@ class Dataset(base.Dataset):
         with open(os.path.join(self.path, "transforms.json"), "r") as f:
             self.transforms = json.load(f)
 
-        self.list = [f["file_path"].split("/")[-1] for f in self.transforms["frames"]
-                     if os.path.exists(os.path.join(self.path_image, f["file_path"].split("/")[-1]))]
+        # filter to only contain those images that exist on disk
+        self.transforms["frames"] = [f for f in self.transforms["frames"] if os.path.exists(os.path.join(self.path_image, f["file_path"].split("/")[-1]))]
+        self.list = [f["file_path"].split("/")[-1] for f in self.transforms["frames"]]
+
         num_val_split = int(len(self) * opt.data.val_ratio)
         self.list = self.list[:-num_val_split] if split=="train" else self.list[-num_val_split:]
-        if subset: self.list = self.list[:subset]
+        self.transforms["frames"] = self.transforms["frames"][:-num_val_split] if split=="train" else self.transforms["frames"][-num_val_split:]
+
+        if subset:
+            self.list = self.list[:subset]
+            self.transforms["frames"] = self.transforms["frames"][:subset]
 
         # preload dataset
         if opt.data.preload:
