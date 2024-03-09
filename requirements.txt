@@ -1,4 +1,4 @@
-pytorch
+torch
 numpy
 scipy
 tqdm
@@ -6,7 +6,6 @@ termcolor
 easydict
 imageio
 ipdb
-pytorch
 torchvision
 tensorboard
 visdom
