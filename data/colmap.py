@@ -48,15 +48,15 @@ class Dataset(base.Dataset):
         # re-orient around a canonical pose
         self.canconial_pose_idx = 0
         self.max_timestamp = -1.0
-        canonical_pose = torch.tensor(self.transforms["frames"][self.canconial_pose_idx]["transform_matrix"]).float()
+        # raw poses are t_world_camera
+        # make camera0 new world frame
+        t_world_camera0 = torch.tensor(self.transforms["frames"][self.canconial_pose_idx]["transform_matrix"]).float()
         for frame in self.transforms["frames"]:
-            frame["transform_matrix"] = camera.pose.compose([
-                camera.pose.invert(camera.pose(R=canonical_pose[None, :3, :3], t=canonical_pose[None, :3, 3])),
-                torch.tensor(frame["transform_matrix"])[:3]
-            ])
+            t_world_cameraf = torch.tensor(frame["transform_matrix"]).float()
+            t_camera0_cameraf = torch.linalg.inv(t_world_camera0) @ t_world_cameraf
+            frame["transform_matrix"] = t_camera0_cameraf
             if "timestamp" in frame:
                 self.max_timestamp = max(self.max_timestamp, frame["timestamp"])
-
 
         assert len(self.items) > 0
         # preload dataset
@@ -112,7 +112,7 @@ class Dataset(base.Dataset):
         self.all = torch.utils.data._utils.collate.default_collate([s for s in self])
 
     def get_all_camera_poses(self,opt):
-        pose_raw_all = [torch.tensor(f["transform_matrix"],dtype=torch.float32) for f in self.transforms["frames"]]
+        pose_raw_all = [torch.tensor(self.transforms["frames"][i]["transform_matrix"], dtype=torch.float32) for i in self.items]
         pose_canon_all = torch.stack([self.parse_raw_camera(opt,p) for p in pose_raw_all],dim=0)
         return pose_canon_all
 
@@ -160,4 +160,4 @@ class Dataset(base.Dataset):
         pose_flip = camera.pose(R=torch.diag(torch.tensor([1,-1,-1])))
         pose = camera.pose.compose([pose_flip,pose_raw[:3]])
         pose = camera.pose.invert(pose)
-        return pose
+        return pose # t_camera_world
