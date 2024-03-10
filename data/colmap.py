@@ -1,3 +1,4 @@
+from functools import cached_property
 from typing import List
 import numpy as np
 import os,sys,time
@@ -14,10 +15,17 @@ import pickle
 from . import base
 import camera
 from util import log,debug
+import random
+
+
 
 class Dataset(base.Dataset):
 
     def __init__(self, opt, split="train", subset=None):
+        assert subset is None
+        self.opt = opt
+        torch.random.seed(0)
+        random.seed(0)
         self.raw_H,self.raw_W = opt.data.image_size
         super().__init__(opt,split)
         assert opt.data.root is not None
@@ -31,26 +39,53 @@ class Dataset(base.Dataset):
             self.transforms = json.load(f)
 
         self.transforms["frames"] = [f for f in self.transforms["frames"] if os.path.exists(os.path.join(self.path_image, f["file_path"].split("/")[-1]))]
-        
-
-        # filter to only contain those images that exist on disk
-        if hasattr(opt.data, "subsample"):
-            self.transforms["frames"] = self.transforms["frames"][::opt.data.subsample]
-
         self.list = [f["file_path"].split("/")[-1] for f in self.transforms["frames"]]
 
-        num_val_split = int(len(self) * opt.data.val_ratio)
-        self.list = self.list[:-num_val_split] if split=="train" else self.list[-num_val_split:]
-        self.transforms["frames"] = self.transforms["frames"][:-num_val_split] if split=="train" else self.transforms["frames"][-num_val_split:]
+        # re-orient around a canonical pose
+        self.canconial_pose_idx = 0
+        self.transforms["frames"] = [
+            camera.pose.compose([
+                torch.tensor(camera.pose.invert(self.transforms["frames"][self.canconial_pose_idx]["transform_matrix"])),
+                torch.tensor(f["transform_matrix"])
+            ]
+            ) for f in self.transforms["frames"]
+        ]
 
-        if subset:
-            self.list = self.list[:subset]
-            self.transforms["frames"] = self.transforms["frames"][:subset]
+        self.max_timestamp = -1.0
+        for frame in self.transforms["frames"]:
+            if "timestamp" in frame:
+                self.max_timestamp = max(self.max_timestamp, frame["timestamp"])
+
+        assert len(self.items) > 0
 
         # preload dataset
         if opt.data.preload:
             self.images = self.preload_threading(opt,self.get_image)
             self.cameras = self.preload_threading(opt,self.get_camera,data_str="cameras")
+
+    def subsample(self, items):
+
+        if hasattr(self.opt.data, "shuffle") and self.opt.data.shuffle:
+            random.shuffle(items)
+
+        if hasattr(self.opt.data, "subsample"):
+            items = items[::self.opt.data.subsample]
+
+        all_inds = list(range(len(items)))
+        random.shuffle(all_inds)
+
+        num_val_split = int(len(items) * self.opt.data.val_ratio)
+        if self.split == "train":
+            items = items[all_inds[:-num_val_split]]
+        else:
+            items = items[all_inds[-num_val_split:]]
+
+        return items
+
+    @cached_property
+    def items(self):
+        items = [i for i in range(len(self.list))]
+        return self.subsample(items)
 
     def prefetch_all_data(self,opt):
         assert(not opt.data.augment)
@@ -63,12 +98,18 @@ class Dataset(base.Dataset):
         return pose_canon_all
 
     def __getitem__(self,idx):
+        frame_id = self.items[idx]
         opt = self.opt
-        sample = dict(idx=idx)
+        sample = dict(idx=frame_id)
+        if "timestamp" in self.transforms["frames"][frame_id]:
+            assert self.max_timestamp > 0
+            sample["timestamp"] = self.transforms["frames"][frame_id]["timestamp"] / self.max_timestamp
+        else:
+            sample["timestamp"] = frame_id / len(self.items)
         aug = self.generate_augmentation(opt) if self.augment else None
-        image = self.images[idx] if opt.data.preload else self.get_image(opt,idx)
+        image = self.images[frame_id] if opt.data.preload else self.get_image(opt,frame_id)
         image = self.preprocess_image(opt,image,aug=aug)
-        intr,pose = self.cameras[idx] if opt.data.preload else self.get_camera(opt,idx)
+        intr,pose = self.cameras[frame_id] if opt.data.preload else self.get_camera(opt,frame_id)
         intr,pose = self.preprocess_camera(opt,intr,pose,aug=aug)
         sample.update(
             image=image,
@@ -77,12 +118,12 @@ class Dataset(base.Dataset):
         )
         return sample
 
-    def get_image(self, opt, idx):
-        image_fname = "{}/{}".format(self.path_image,self.list[idx])
+    def get_image(self, opt, frame_id):
+        image_fname = "{}/{}".format(self.path_image,self.list[frame_id])
         image = PIL.Image.fromarray(imageio.imread(image_fname)) # directly using PIL.Image.open() leads to weird corruption....
         return image
 
-    def get_camera(self, opt, idx):
+    def get_camera(self, opt, frame_id):
         cy = self.transforms["cy"]
         cx = self.transforms["cx"]
         fy = self.transforms["fl_y"]
@@ -92,7 +133,7 @@ class Dataset(base.Dataset):
         intr = torch.tensor([[fx,0,cx],
                              [0,fy,cy],
                              [0,0,1]]).float()
-        pose_raw = torch.tensor(self.transforms["frames"][idx]["transform_matrix"]).float()
+        pose_raw = torch.tensor(self.transforms["frames"][frame_id]["transform_matrix"]).float()
         pose = self.parse_raw_camera(opt,pose_raw)
         return intr, pose
 
