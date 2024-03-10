@@ -30,11 +30,12 @@ class Dataset(base.Dataset):
         with open(os.path.join(self.path, "transforms.json"), "r") as f:
             self.transforms = json.load(f)
 
+        self.transforms["frames"] = [f for f in self.transforms["frames"] if os.path.exists(os.path.join(self.path_image, f["file_path"].split("/")[-1]))]
+
         # filter to only contain those images that exist on disk
         if hasattr(opt.data, "subsample"):
             self.transforms["frames"] = self.transforms["frames"][::opt.data.subsample]
 
-        self.transforms["frames"] = [f for f in self.transforms["frames"] if os.path.exists(os.path.join(self.path_image, f["file_path"].split("/")[-1]))]
         self.list = [f["file_path"].split("/")[-1] for f in self.transforms["frames"]]
 
         num_val_split = int(len(self) * opt.data.val_ratio)
