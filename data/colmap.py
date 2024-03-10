@@ -1,4 +1,6 @@
 from functools import cached_property
+import queue
+import threading
 from typing import List
 import numpy as np
 import os,sys,time
@@ -12,6 +14,8 @@ from easydict import EasyDict as edict
 import json
 import pickle
 
+import tqdm
+
 from . import base
 import camera
 from util import log,debug
@@ -24,7 +28,7 @@ class Dataset(base.Dataset):
     def __init__(self, opt, split="train", subset=None):
         assert subset is None
         self.opt = opt
-        torch.random.seed(0)
+        torch.manual_seed(0)
         random.seed(0)
         self.raw_H,self.raw_W = opt.data.image_size
         super().__init__(opt,split)
@@ -43,25 +47,40 @@ class Dataset(base.Dataset):
 
         # re-orient around a canonical pose
         self.canconial_pose_idx = 0
-        self.transforms["frames"] = [
-            camera.pose.compose([
-                torch.tensor(camera.pose.invert(self.transforms["frames"][self.canconial_pose_idx]["transform_matrix"])),
-                torch.tensor(f["transform_matrix"])
-            ]
-            ) for f in self.transforms["frames"]
-        ]
-
         self.max_timestamp = -1.0
+        canonical_pose = torch.tensor(self.transforms["frames"][self.canconial_pose_idx]["transform_matrix"]).float()
         for frame in self.transforms["frames"]:
+            frame["transform_matrix"] = camera.pose.compose([
+                camera.pose.invert(camera.pose(R=canonical_pose[None, :3, :3], t=canonical_pose[None, :3, 3])),
+                torch.tensor(frame["transform_matrix"])[:3]
+            ])
             if "timestamp" in frame:
                 self.max_timestamp = max(self.max_timestamp, frame["timestamp"])
 
-        assert len(self.items) > 0
 
+        assert len(self.items) > 0
         # preload dataset
         if opt.data.preload:
             self.images = self.preload_threading(opt,self.get_image)
             self.cameras = self.preload_threading(opt,self.get_camera,data_str="cameras")
+
+    def __len__(self):
+        return len(self.items)
+
+    def preload_threading(self,opt,load_func,data_str="images"):
+        data_list = [None]*len(self)
+        q = queue.Queue(maxsize=len(self))
+        idx_tqdm = tqdm.tqdm(range(len(self)),desc="preloading {}".format(data_str),leave=False)
+        for i in range(len(self)): q.put(i)
+        lock = threading.Lock()
+        for ti in range(opt.data.num_workers):
+            t = threading.Thread(target=self.preload_worker,
+                                 args=(data_list,load_func,q,lock,idx_tqdm),daemon=True)
+            t.start()
+        q.join()
+        idx_tqdm.close()
+        assert(all(map(lambda x: x is not None,data_list)))
+        return {item: data_list[i] for i, item in enumerate(self.items)}
 
     def subsample(self, items):
 
@@ -76,9 +95,9 @@ class Dataset(base.Dataset):
 
         num_val_split = int(len(items) * self.opt.data.val_ratio)
         if self.split == "train":
-            items = items[all_inds[:-num_val_split]]
+            items = [items[i] for i in all_inds[:-num_val_split]]
         else:
-            items = items[all_inds[-num_val_split:]]
+            items = [items[i] for i in all_inds[-num_val_split:]]
 
         return items
 
@@ -100,12 +119,12 @@ class Dataset(base.Dataset):
     def __getitem__(self,idx):
         frame_id = self.items[idx]
         opt = self.opt
-        sample = dict(idx=frame_id)
+        sample = dict(idx=idx)
         if "timestamp" in self.transforms["frames"][frame_id]:
             assert self.max_timestamp > 0
             sample["timestamp"] = self.transforms["frames"][frame_id]["timestamp"] / self.max_timestamp
         else:
-            sample["timestamp"] = frame_id / len(self.items)
+            sample["timestamp"] = frame_id / len(self.list)
         aug = self.generate_augmentation(opt) if self.augment else None
         image = self.images[frame_id] if opt.data.preload else self.get_image(opt,frame_id)
         image = self.preprocess_image(opt,image,aug=aug)
