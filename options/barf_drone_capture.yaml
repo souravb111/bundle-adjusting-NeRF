@@ -1,0 +1,16 @@
+_parent_: options/barf_llff.yaml
+
+data:                                                       # data options
+    # root: "/home/quinlan/school/pyslam/videos/drone/"
+    root: "/home/quinlan/school/pyslam/videos/test/"
+    dataset: drone_capture                                   # dataset name
+    scene: "generated"                                     # scene name
+    # image_size: [2160,3840]
+    image_size: [1920,1080]                                 # input image sizes [height,width]
+
+nerf:
+  rand_rays: 2048                                           # number of random rays for each step
+
+freq:
+  vis: 20000
+  val: 20000

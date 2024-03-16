@@ -27,7 +27,8 @@ class Model(base.Model):
         super().load_dataset(opt,eval_split=eval_split)
         # prefetch all training data
         self.train_data.prefetch_all_data(opt)
-        self.train_data.all = edict(util.move_to_device(self.train_data.all,opt.device))
+        # self.train_data.all = edict(util.move_to_device(self.train_data.all,opt.device))
+        self.train_data.all = edict(self.train_data.all)
 
     def setup_optimizer(self,opt):
         log.info("setting up optimizers...")
@@ -68,7 +69,7 @@ class Model(base.Model):
             # set var to all available images
             self.train_iteration(opt,var,loader)
             if opt.optim.sched: self.sched.step()
-            if self.it%opt.freq.val==0: self.validate(opt,self.it)
+            if self.it%opt.freq.val==0: self.validate(opt,var,self.it)
             if self.it%opt.freq.ckpt==0: self.save_checkpoint(opt,ep=None,it=self.it)
         # after training
         if opt.tb:
@@ -206,14 +207,14 @@ class Graph(base.Graph):
         if opt.nerf.fine_sampling:
             self.nerf_fine = NeRF(opt)
 
-    def forward(self,opt,var,mode=None):
+    def forward(self,opt,var,mode=None, it=0):
         batch_size = len(var.idx)
         pose = self.get_pose(opt,var,mode=mode)
         # render images
         if opt.nerf.rand_rays and mode in ["train","test-optim"]:
             # sample random rays for optimization
             var.ray_idx = torch.randperm(opt.H*opt.W,device=opt.device)[:opt.nerf.rand_rays//batch_size]
-            ret = self.render(opt,pose,intr=var.intr,ray_idx=var.ray_idx,mode=mode) # [B,N,3],[B,N,1]
+            ret = self.render(opt,pose[:it],intr=var.intr,ray_idx=var.ray_idx,mode=mode) # [B,N,3],[B,N,1]
         else:
             # render full image (process in slices)
             ret = self.render_by_slices(opt,pose,intr=var.intr,mode=mode) if opt.nerf.rand_rays else \
@@ -226,7 +227,7 @@ class Graph(base.Graph):
         batch_size = len(var.idx)
         image = var.image.view(batch_size,3,opt.H*opt.W).permute(0,2,1)
         if opt.nerf.rand_rays and mode in ["train","test-optim"]:
-            image = image[:,var.ray_idx]
+            image = image[:,var.ray_idx.to(image.device)].to(opt.device)
         # compute image losses
         if opt.loss_weight.render is not None:
             loss.render = self.MSE_loss(var.rgb,image)
