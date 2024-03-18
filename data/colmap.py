@@ -74,6 +74,7 @@ class Dataset(base.Dataset):
             image=image,
             intr=intr,
             pose=pose,
+            time=idx/len(self.list)
         )
         return sample
 
