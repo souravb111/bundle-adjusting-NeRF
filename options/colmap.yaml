@@ -5,6 +5,7 @@ data:                                                       # data options
     dataset: colmap                                   # dataset name
     scene: "chair_data_colmap"                                     # scene name
     image_size: [1440,1920]                                 # input image sizes [height,width]
+    # subsample: 5
 
 nerf:
   rand_rays: 2048                                           # number of random rays for each step
