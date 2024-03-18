@@ -36,7 +36,17 @@ class Model(nerf.Model):
             nn.LeakyReLU(),
             nn.Linear(128, 6),
         )
-        # torch.nn.init.zeros_(self.graph.se3_refine.weight)
+        self.initialize_layers()
+        
+    def initialize_layers(self):
+        # initialize last linear layer to 0
+        l = len(self.graph.se3_refine)
+        for i, layer in enumerate(self.graph.se3_refine):
+            if i < l - 1:
+                break
+            if isinstance(layer, nn.Linear):
+                nn.init.constant_(layer.weight, 0)
+                nn.init.constant_(layer.bias, 0)
 
     def setup_optimizer(self,opt):
         super().setup_optimizer(opt)
@@ -61,7 +71,7 @@ class Model(nerf.Model):
         self.optim_pose.step()
         if opt.optim.warmup_pose:
             self.optim_pose.param_groups[0]["lr"] = self.optim_pose.param_groups[0]["lr_orig"] # reset learning rate
-        # if opt.optim.sched_pose: self.sched_pose.step()
+        if opt.optim.sched_pose: self.sched_pose.step()
         self.graph.nerf.progress.data.fill_(self.it/opt.max_iter)
         if opt.nerf.fine_sampling:
             self.graph.nerf_fine.progress.data.fill_(self.it/opt.max_iter)
@@ -242,16 +252,16 @@ class Graph(nerf.Graph):
             pose = camera.pose.compose([pose_refine,pose.to(pose_refine.device)])
         elif mode in ["val","eval","test-optim"]:
             # # align test pose to refined coordinate system (up to sim3)
-            # sim3 = self.sim3
-            # center = torch.zeros(1,1,3,device=opt.device)
-            # center = camera.cam2world(center,var.pose)[:,0] # [N,3]
-            # center_aligned = (center-sim3.t0)/sim3.s0@sim3.R*sim3.s1+sim3.t1
-            # R_aligned = var.pose[...,:3]@self.sim3.R
-            # t_aligned = (-R_aligned@center_aligned[...,None])[...,0]
-            # pose = camera.pose(R=R_aligned,t=t_aligned)
-            # # additionally factorize the remaining pose imperfection
-            # if opt.optim.test_photo and mode!="val":
-            #     pose = camera.pose.compose([var.pose_refine_test,pose])
+            sim3 = self.sim3
+            center = torch.zeros(1,1,3,device=opt.device)
+            center = camera.cam2world(center,var.pose)[:,0] # [N,3]
+            center_aligned = (center-sim3.t0)/sim3.s0@sim3.R*sim3.s1+sim3.t1
+            R_aligned = var.pose[...,:3]@self.sim3.R
+            t_aligned = (-R_aligned@center_aligned[...,None])[...,0]
+            pose = camera.pose(R=R_aligned,t=t_aligned)
+            # additionally factorize the remaining pose imperfection
+            if opt.optim.test_photo and mode!="val":
+                pose = camera.pose.compose([var.pose_refine_test,pose])
             pose = self.pose_eye
             new_pose = self.se3_refine(var.time.unsqueeze(-1).float().cpu())
             pose_refine = camera.lie.se3_to_SE3(new_pose)
