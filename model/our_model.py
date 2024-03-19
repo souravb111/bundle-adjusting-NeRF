@@ -33,6 +33,7 @@ class Model(nerf.Model):
             nn.Linear(128, 6),
         )
         self.initialize_layers()
+        self.graph.to(opt.device)
         
     def initialize_layers(self):
         for layer in self.graph.se3_refine:
@@ -81,7 +82,7 @@ class Model(nerf.Model):
 
     @torch.no_grad()
     def validate(self,opt,ep=None):
-        pose,pose_GT = self.get_all_training_poses(opt,ep=ep)
+        pose,pose_GT = self.get_all_training_poses(opt)
         _,self.graph.sim3 = self.prealign_cameras(opt,pose.to(pose_GT.device),pose_GT)
         super().validate(opt,ep=ep)
 
@@ -94,7 +95,7 @@ class Model(nerf.Model):
             self.tb.add_scalar("{0}/{1}".format(split,"lr_pose"),lr,step)
         # compute pose error
         if split=="train" and opt.data.dataset in ["blender","llff"]:
-            pose,pose_GT = self.get_all_training_poses(opt,var)
+            pose,pose_GT = self.get_all_training_poses(opt)
             pose_aligned,_ = self.prealign_cameras(opt,pose,pose_GT)
             error = self.evaluate_camera_alignment(opt,pose_aligned,pose_GT)
             self.tb.add_scalar("{0}/error_R".format(split),error.R.mean(),step)
@@ -105,7 +106,7 @@ class Model(nerf.Model):
         super().visualize(opt,var,step=step,split=split)
         if opt.visdom:
             if split=="val":
-                pose,pose_GT = self.get_all_training_poses(opt,var)
+                pose,pose_GT = self.get_all_training_poses(opt)
                 util_vis.vis_cameras(opt,self.vis,step=step,poses=[pose,pose_GT])
 
     @torch.no_grad()
