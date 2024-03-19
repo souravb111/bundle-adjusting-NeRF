@@ -13,7 +13,7 @@ import util,util_vis
 from util import log,debug
 from . import nerf
 import camera
-from torch import nn
+
 # ============================ main engine for training and evaluation ============================
 
 class Model(nerf.Model):
@@ -27,29 +27,8 @@ class Model(nerf.Model):
             # pre-generate synthetic pose perturbation
             se3_noise = torch.randn(len(self.train_data),6,device=opt.device)*opt.camera.noise
             self.graph.pose_noise = camera.lie.se3_to_SE3(se3_noise)
-        self.graph.se3_refine = nn.Sequential(
-            nn.Linear(1, 128),
-            nn.ReLU(),
-            nn.Linear(128, 6),
-        )
-        self.initialize_layers()
-        self.graph.to(opt.device)
-        
-    def initialize_layers(self):
-        for layer in self.graph.se3_refine:
-            if isinstance(layer, nn.Linear):
-                nn.init.kaiming_normal_(layer.weight, mode='fan_out', nonlinearity='relu')
-                nn.init.constant_(layer.bias, 0)
-
-    # def initialize_layers(self):
-    #     # initialize last linear layer to 0
-    #     l = len(self.graph.se3_refine)
-    #     for i, layer in enumerate(self.graph.se3_refine):
-    #         if i < l - 1:
-    #             break
-    #         if isinstance(layer, nn.Linear):
-    #             nn.init.constant_(layer.weight, 0)
-    #             nn.init.constant_(layer.bias, 0)
+        self.graph.se3_refine = torch.nn.Embedding(len(self.train_loader.dataset.list),6).to(opt.device) # TODO(bagro): remove this magick 100 number
+        torch.nn.init.zeros_(self.graph.se3_refine.weight)
 
     def setup_optimizer(self,opt):
         super().setup_optimizer(opt)
@@ -83,7 +62,7 @@ class Model(nerf.Model):
     @torch.no_grad()
     def validate(self,opt,ep=None):
         pose,pose_GT = self.get_all_training_poses(opt)
-        _,self.graph.sim3 = self.prealign_cameras(opt,pose.to(pose_GT.device),pose_GT)
+        _,self.graph.sim3 = self.prealign_cameras(opt,pose,pose_GT)
         super().validate(opt,ep=ep)
 
     @torch.no_grad()
@@ -120,11 +99,8 @@ class Model(nerf.Model):
                 pose = camera.pose.compose([self.graph.pose_noise,pose])
         else: pose = self.graph.pose_eye
         # add learned pose correction to all training data
-        new_pose = self.graph.se3_refine(self.var.time.unsqueeze(-1).float().cpu())
-        pose_refine = camera.lie.se3_to_SE3(new_pose)
-        pose = camera.pose.compose([pose_refine,pose.to(pose_refine.device)])
-        # pose_refine = camera.lie.se3_to_SE3(self.graph.se3_refine.weight)
-        # pose = camera.pose.compose([pose_refine,pose])
+        pose_refine = self.graph.interpolate_se3_refine(self.var.time.unsqueeze(-1)) #camera.lie.se3_to_SE3(self.graph.se3_refine.weight)
+        pose = camera.pose.compose([pose_refine,pose])
         return pose,pose_GT
 
     @torch.no_grad()
@@ -238,6 +214,17 @@ class Graph(nerf.Graph):
             self.nerf_fine = NeRF(opt)
         self.pose_eye = torch.eye(3,4).to(opt.device)
 
+    def interpolate_se3_refine(self, times):
+        # times: values in [0, 1]
+        se3_refine = self.se3_refine.weight[None, None] # (1, 1, N, 6)
+        se3_refine = se3_refine.permute(0, 3, 1, 2) # (1, 6, 1, N)
+        # sample `weight` at `times`:
+        times = 2 * times - 1 # (S, 1)
+        times = torch.concat((times, 0.5 * torch.ones_like(times)), dim=-1)[None, None] # (1, 1, S, 2)
+        sampled_se3_refine = torch.nn.functional.grid_sample(se3_refine, times.float(), align_corners=False)[0, :, 0].transpose(0, 1) # (6, S)
+        pose_refine = camera.lie.se3_to_SE3(sampled_se3_refine)
+        return pose_refine 
+
     def get_pose(self,opt,var,mode=None):
         if mode=="train":
             # add the pre-generated pose perturbations
@@ -248,13 +235,11 @@ class Graph(nerf.Graph):
                 else: pose = var.pose
             else: pose = self.pose_eye
             # add learnable pose correction
-
             # var.se3_refine = self.se3_refine.weight[var.idx]
-            new_pose = self.se3_refine(var.time.unsqueeze(-1).float())
-            pose_refine = camera.lie.se3_to_SE3(new_pose)
-            pose = camera.pose.compose([pose_refine,pose.to(pose_refine.device)])
+            pose_refine = self.interpolate_se3_refine(var.time.unsqueeze(-1)) #camera.lie.se3_to_SE3(var.se3_refine)
+            pose = camera.pose.compose([pose_refine,pose])
         elif mode in ["val","eval","test-optim"]:
-            # # align test pose to refined coordinate system (up to sim3)
+            # align test pose to refined coordinate system (up to sim3)
             sim3 = self.sim3
             center = torch.zeros(1,1,3,device=opt.device)
             center = camera.cam2world(center,var.pose)[:,0] # [N,3]
@@ -265,10 +250,6 @@ class Graph(nerf.Graph):
             # additionally factorize the remaining pose imperfection
             if opt.optim.test_photo and mode!="val":
                 pose = camera.pose.compose([var.pose_refine_test,pose])
-            pose = self.pose_eye
-            new_pose = self.se3_refine(var.time.unsqueeze(-1).float().cpu())
-            pose_refine = camera.lie.se3_to_SE3(new_pose)
-            pose = camera.pose.compose([pose_refine,pose.to(pose_refine.device)])
         else: pose = var.pose
         return pose
 
