@@ -29,24 +29,26 @@ class Model(nerf.Model):
             self.graph.pose_noise = camera.lie.se3_to_SE3(se3_noise)
         self.graph.se3_refine = nn.Sequential(
             nn.Linear(1, 128),
-            nn.LeakyReLU(),
-            nn.Linear(128, 128),
-            nn.LeakyReLU(),
-            nn.Linear(128, 128),
-            nn.LeakyReLU(),
+            nn.ReLU(),
             nn.Linear(128, 6),
         )
         self.initialize_layers()
         
     def initialize_layers(self):
-        # initialize last linear layer to 0
-        l = len(self.graph.se3_refine)
-        for i, layer in enumerate(self.graph.se3_refine):
-            if i < l - 1:
-                break
+        for layer in self.graph.se3_refine:
             if isinstance(layer, nn.Linear):
-                nn.init.constant_(layer.weight, 0)
+                nn.init.kaiming_normal_(layer.weight, mode='fan_out', nonlinearity='relu')
                 nn.init.constant_(layer.bias, 0)
+
+    # def initialize_layers(self):
+    #     # initialize last linear layer to 0
+    #     l = len(self.graph.se3_refine)
+    #     for i, layer in enumerate(self.graph.se3_refine):
+    #         if i < l - 1:
+    #             break
+    #         if isinstance(layer, nn.Linear):
+    #             nn.init.constant_(layer.weight, 0)
+    #             nn.init.constant_(layer.bias, 0)
 
     def setup_optimizer(self,opt):
         super().setup_optimizer(opt)
@@ -117,6 +119,7 @@ class Model(nerf.Model):
                 pose = camera.pose.compose([self.graph.pose_noise,pose])
         else: pose = self.graph.pose_eye
         # add learned pose correction to all training data
+        print(f"Time: {var.time}")
         new_pose = self.graph.se3_refine(var.time.unsqueeze(-1).float().cpu())
         pose_refine = camera.lie.se3_to_SE3(new_pose)
         pose = camera.pose.compose([pose_refine,pose.to(pose_refine.device)])

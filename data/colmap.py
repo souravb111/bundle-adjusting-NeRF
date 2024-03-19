@@ -46,15 +46,8 @@ class Dataset(base.Dataset):
         self.list = [f["file_path"].split("/")[-1] for f in self.transforms["frames"]]
 
         # re-orient around a canonical pose
-        self.canconial_pose_idx = 0
         self.max_timestamp = -1.0
-        # raw poses are t_world_camera
-        # make camera0 new world frame
-        t_world_camera0 = torch.tensor(self.transforms["frames"][self.canconial_pose_idx]["transform_matrix"]).float()
         for frame in self.transforms["frames"]:
-            t_world_cameraf = torch.tensor(frame["transform_matrix"]).float()
-            t_camera0_cameraf = torch.linalg.inv(t_world_camera0) @ t_world_cameraf
-            frame["transform_matrix"] = t_camera0_cameraf
             if "timestamp" in frame:
                 self.max_timestamp = max(self.max_timestamp, frame["timestamp"])
 
@@ -122,9 +115,9 @@ class Dataset(base.Dataset):
         sample = dict(idx=idx)
         if "timestamp" in self.transforms["frames"][frame_id]:
             assert self.max_timestamp > 0
-            sample["timestamp"] = self.transforms["frames"][frame_id]["timestamp"] / self.max_timestamp
+            sample["time"] = self.transforms["frames"][frame_id]["timestamp"] / self.max_timestamp
         else:
-            sample["timestamp"] = frame_id / len(self.list)
+            sample["time"] = frame_id / len(self.list)
         aug = self.generate_augmentation(opt) if self.augment else None
         image = self.images[frame_id] if opt.data.preload else self.get_image(opt,frame_id)
         image = self.preprocess_image(opt,image,aug=aug)
@@ -134,7 +127,6 @@ class Dataset(base.Dataset):
             image=image,
             intr=intr,
             pose=pose,
-            time=idx/len(self.list)
         )
         return sample
 
