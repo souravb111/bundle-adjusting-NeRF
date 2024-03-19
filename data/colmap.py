@@ -43,6 +43,7 @@ class Dataset(base.Dataset):
             self.transforms = json.load(f)
 
         self.transforms["frames"] = [f for f in self.transforms["frames"] if os.path.exists(os.path.join(self.path_image, f["file_path"].split("/")[-1]))]
+        # self.transforms["frames"] = sorted(self.transforms["frames"], key= lambda x: int(x["file_path"].split("/")[-1].split(".")[0]))
         self.list = [f["file_path"].split("/")[-1] for f in self.transforms["frames"]]
 
         # re-orient around a canonical pose
@@ -53,9 +54,9 @@ class Dataset(base.Dataset):
 
         assert len(self.items) > 0
         # preload dataset
-        if opt.data.preload:
-            self.images = self.preload_threading(opt,self.get_image)
-            self.cameras = self.preload_threading(opt,self.get_camera,data_str="cameras")
+        # if opt.data.preload:
+        #     self.images = self.preload_threading(opt,self.get_image)
+        #     self.cameras = self.preload_threading(opt,self.get_camera,data_str="cameras")
 
     def __len__(self):
         return len(self.items)
@@ -96,7 +97,7 @@ class Dataset(base.Dataset):
 
     @cached_property
     def items(self):
-        items = [i for i in range(len(self.list))]
+        items = range(len(self.list))
         return self.subsample(items)
 
     def prefetch_all_data(self,opt):
@@ -117,11 +118,12 @@ class Dataset(base.Dataset):
             assert self.max_timestamp > 0
             sample["time"] = self.transforms["frames"][frame_id]["timestamp"] / self.max_timestamp
         else:
-            sample["time"] = frame_id / len(self.list)
+            mock_timestamp = int(self.list[frame_id].split(".")[0])
+            sample["time"] = mock_timestamp / len(self.list)
         aug = self.generate_augmentation(opt) if self.augment else None
-        image = self.images[frame_id] if opt.data.preload else self.get_image(opt,frame_id)
+        image = self.get_image(opt, frame_id) # self.images[frame_id] if opt.data.preload else self.get_image(opt,frame_id)
         image = self.preprocess_image(opt,image,aug=aug)
-        intr,pose = self.cameras[frame_id] if opt.data.preload else self.get_camera(opt,frame_id)
+        intr,pose = self.get_camera(opt, frame_id) # self.cameras[frame_id] if opt.data.preload else self.get_camera(opt,frame_id)
         intr,pose = self.preprocess_camera(opt,intr,pose,aug=aug)
         sample.update(
             image=image,

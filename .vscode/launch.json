@@ -17,7 +17,7 @@
             "request": "launch",
             "program": "train.py",
             "console": "integratedTerminal",
-            "args": ["--group=debug","--name=debug","--yaml=colmap","--data.scene=oats","--model=barf","--visdom=False","--data.image_size=[1080,1920]"],
+            "args": ["--group=debug","--name=debug_painting","--yaml=colmap","--data.scene=painting","--model=our_model","--visdom=False","--data.image_size=[1080,1920]"],
         }
     ]
 }
