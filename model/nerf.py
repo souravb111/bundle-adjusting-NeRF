@@ -46,6 +46,9 @@ class Model(base.Model):
             kwargs = { k:v for k,v in opt.optim.sched.items() if k!="type" }
             self.sched = scheduler(self.optim,**kwargs)
 
+    def mask_update(self, mask):
+        pass
+    
     def train(self,opt):
         # before training
         log.title("TRAINING START")
@@ -74,6 +77,7 @@ class Model(base.Model):
             mask = var['time'] < self.min_time + proportion_accessible
             for key, val in var.items():
                 temp_var[key] = val[mask]
+            self.mask_update(mask)
             temp_var = edict(temp_var)
             self.train_iteration(opt,temp_var,loader)
             if opt.optim.sched: self.sched.step()
