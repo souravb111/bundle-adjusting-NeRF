@@ -29,7 +29,7 @@ class Model(nerf.Model):
             self.graph.pose_noise = camera.lie.se3_to_SE3(se3_noise)
         self.graph.se3_refine = torch.nn.Embedding(len(self.train_loader.dataset.list),6).to(opt.device) # TODO(bagro): remove this magick 100 number
         torch.nn.init.zeros_(self.graph.se3_refine.weight)
-        self.adjust_next = True
+        self.adjust_next = False
 
     def mask_update(self, mask):
         if self.adjust_next:

@@ -20,7 +20,7 @@ import camera
 class Model(base.Model):
 
     def __init__(self,opt):
-        self.max_iterations = 60000
+        self.max_iterations = 1
         self.min_time = 0.03
         super().__init__(opt)
         self.lpips_loss = lpips.LPIPS(net="alex").to(opt.device)
