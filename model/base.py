@@ -66,9 +66,9 @@ class Model():
         if opt.visdom:
             # check if visdom server is runninng
             is_open = util.check_socket_open(opt.visdom.server,opt.visdom.port)
-            retry = "n"
+            retry = None
             while not is_open:
-                # retry = input("visdom port ({}) not open, retry? (y/n) ".format(opt.visdom.port))
+                retry = input("visdom port ({}) not open, retry? (y/n) ".format(opt.visdom.port))
                 if retry not in ["y","n"]: continue
                 if retry=="y":
                     is_open = util.check_socket_open(opt.visdom.server,opt.visdom.port)
@@ -113,7 +113,7 @@ class Model():
         self.timer.it_start = time.time()
         # train iteration
         self.optim.zero_grad()
-        var = self.graph.forward(opt,var,mode="train", it=min(int(self.it / 60000) + 1, 1))
+        var = self.graph.forward(opt,var,mode="train")
         loss = self.graph.compute_loss(opt,var,mode="train")
         loss = self.summarize_loss(opt,var,loss)
         loss.all.backward()

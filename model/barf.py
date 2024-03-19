@@ -93,7 +93,7 @@ class Model(nerf.Model):
         # get ground-truth (canonical) camera poses
         pose_GT = self.train_data.get_all_camera_poses(opt).to(opt.device)
         # add synthetic pose perturbation to all training data
-        if opt.data.dataset=="blender" or (opt.data.dataset=="colmap" and hasattr(opt.camera, "perturb_gt") and opt.camera.perturb_gt):
+        if opt.data.dataset=="blender":
             pose = pose_GT
             if opt.camera.noise:
                 pose = camera.pose.compose([self.graph.pose_noise,pose])
@@ -217,7 +217,7 @@ class Graph(nerf.Graph):
     def get_pose(self,opt,var,mode=None):
         if mode=="train":
             # add the pre-generated pose perturbations
-            if opt.data.dataset=="blender" or (opt.data.dataset=="colmap" and hasattr(opt.camera, "perturb_gt") and opt.camera.perturb_gt):
+            if opt.data.dataset=="blender":
                 if opt.camera.noise:
                     var.pose_noise = self.pose_noise[var.idx]
                     pose = camera.pose.compose([var.pose_noise,var.pose])
