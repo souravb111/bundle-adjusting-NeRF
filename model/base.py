@@ -111,6 +111,8 @@ class Model():
     def train_iteration(self,opt,var,loader):
         # before train iteration
         self.timer.it_start = time.time()
+        self.train_data.iteration = self.it
+        self.train_data.max_iteration = self.max_iterations
         # train iteration
         self.optim.zero_grad()
         var = self.graph.forward(opt,var,mode="train")

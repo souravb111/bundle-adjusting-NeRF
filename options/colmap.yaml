@@ -1,9 +1,9 @@
 _parent_: options/barf_llff.yaml
 
 data:                                                       # data options
-    root: "/home/bagro/CSC2530GroupProject/data/"
+    root: "/home/quinlan/school/pyslam/videos/"
     dataset: colmap                                   # dataset name
-    scene: "chair_data_colmap"                                     # scene name
+    scene: "painting"                                     # scene name
     image_size: [1440,1920]                                 # input image sizes [height,width]
     # subsample: 5
 

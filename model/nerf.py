@@ -20,6 +20,8 @@ import camera
 class Model(base.Model):
 
     def __init__(self,opt):
+        self.max_iterations = 60000
+        self.min_time = 0.03
         super().__init__(opt)
         self.lpips_loss = lpips.LPIPS(net="alex").to(opt.device)
 
@@ -67,7 +69,13 @@ class Model(base.Model):
         for self.it in loader:
             if self.it<self.iter_start: continue
             # set var to all available images
-            self.train_iteration(opt,var,loader)
+            temp_var = {}
+            proportion_accessible = self.it / self.max_iterations
+            mask = var['time'] < self.min_time + proportion_accessible
+            for key, val in var.items():
+                temp_var[key] = val[mask]
+            temp_var = edict(temp_var)
+            self.train_iteration(opt,temp_var,loader)
             if opt.optim.sched: self.sched.step()
             if self.it%opt.freq.val==0: self.validate(opt,self.it)
             if self.it%opt.freq.ckpt==0: self.save_checkpoint(opt,ep=None,it=self.it)

@@ -93,7 +93,17 @@ class Dataset(base.Dataset):
         else:
             items = [items[i] for i in all_inds[-num_val_split:]]
 
+        items = sorted(items, key=lambda i: self.get_time(self.transforms["frames"][i], i))
+
         return items
+    
+    def get_time(self, transform, frame_id):
+        if "timestamp" in transform:
+            assert self.max_timestamp > 0
+            return transform["timestamp"] / self.max_timestamp
+        else:
+            mock_timestamp = int(self.list[frame_id].split(".")[0])
+            return mock_timestamp / len(self.list)
 
     @cached_property
     def items(self):
@@ -114,12 +124,7 @@ class Dataset(base.Dataset):
         frame_id = self.items[idx]
         opt = self.opt
         sample = dict(idx=idx)
-        if "timestamp" in self.transforms["frames"][frame_id]:
-            assert self.max_timestamp > 0
-            sample["time"] = self.transforms["frames"][frame_id]["timestamp"] / self.max_timestamp
-        else:
-            mock_timestamp = int(self.list[frame_id].split(".")[0])
-            sample["time"] = mock_timestamp / len(self.list)
+        sample["time"] = self.get_time(self.transforms["frames"][frame_id], frame_id)
         aug = self.generate_augmentation(opt) if self.augment else None
         image = self.get_image(opt, frame_id) # self.images[frame_id] if opt.data.preload else self.get_image(opt,frame_id)
         image = self.preprocess_image(opt,image,aug=aug)
