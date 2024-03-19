@@ -57,6 +57,7 @@ class Model(base.Model):
         # pre-compute rays for training:
         loader = tqdm.trange(opt.max_iter,desc="training",leave=False)
         var = self.train_data.all
+        self.var = var
         # pose = self.graph.get_pose(opt,var,mode="train")
         # center,ray = camera.get_center_and_ray(opt, pose, intr=var.intr, device="cpu") # [B,HW,3]
         # while ray.isnan().any(): # TODO: weird bug, ray becomes NaN arbitrarily if batch_size>1, not deterministic reproducible
@@ -69,7 +70,7 @@ class Model(base.Model):
             # set var to all available images
             self.train_iteration(opt,var,loader)
             if opt.optim.sched: self.sched.step()
-            if self.it%opt.freq.val==0: self.validate(opt,var,self.it)
+            if self.it%opt.freq.val==0: self.validate(opt,self.it)
             if self.it%opt.freq.ckpt==0: self.save_checkpoint(opt,ep=None,it=self.it)
         # after training
         if opt.tb:

@@ -80,8 +80,8 @@ class Model(nerf.Model):
         return loss
 
     @torch.no_grad()
-    def validate(self,opt,var,ep=None):
-        pose,pose_GT = self.get_all_training_poses(opt,var)
+    def validate(self,opt,ep=None):
+        pose,pose_GT = self.get_all_training_poses(opt,ep=ep)
         _,self.graph.sim3 = self.prealign_cameras(opt,pose.to(pose_GT.device),pose_GT)
         super().validate(opt,ep=ep)
 
@@ -109,7 +109,7 @@ class Model(nerf.Model):
                 util_vis.vis_cameras(opt,self.vis,step=step,poses=[pose,pose_GT])
 
     @torch.no_grad()
-    def get_all_training_poses(self,opt,var):
+    def get_all_training_poses(self,opt):
         # get ground-truth (canonical) camera poses
         pose_GT = self.train_data.get_all_camera_poses(opt).to(opt.device)
         # add synthetic pose perturbation to all training data
@@ -119,8 +119,7 @@ class Model(nerf.Model):
                 pose = camera.pose.compose([self.graph.pose_noise,pose])
         else: pose = self.graph.pose_eye
         # add learned pose correction to all training data
-        print(f"Time: {var.time}")
-        new_pose = self.graph.se3_refine(var.time.unsqueeze(-1).float().cpu())
+        new_pose = self.graph.se3_refine(self.var.time.unsqueeze(-1).float().cpu())
         pose_refine = camera.lie.se3_to_SE3(new_pose)
         pose = camera.pose.compose([pose_refine,pose.to(pose_refine.device)])
         # pose_refine = camera.lie.se3_to_SE3(self.graph.se3_refine.weight)
