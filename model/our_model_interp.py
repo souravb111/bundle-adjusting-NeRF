@@ -13,19 +13,13 @@ import util,util_vis
 from util import log,debug
 from . import nerf
 import camera
-from torch import nn
-import math
 
 # ============================ main engine for training and evaluation ============================
-
-def get_embedding(x):
-    return torch.stack([x.sin(), x.cos()], -1).flatten(-2, -1)
 
 class Model(nerf.Model):
 
     def __init__(self,opt):
         super().__init__(opt)
-
 
     def build_networks(self,opt):
         super().build_networks(opt)
@@ -33,8 +27,8 @@ class Model(nerf.Model):
             # pre-generate synthetic pose perturbation
             se3_noise = torch.randn(len(self.train_data),6,device=opt.device)*opt.camera.noise
             self.graph.pose_noise = camera.lie.se3_to_SE3(se3_noise)
-        # self.graph.se3_refine = torch.nn.Embedding(len(self.train_loader.dataset.list),6).to(opt.device) # TODO(bagro): remove this magick 100 number
-        # torch.nn.init.zeros_(self.graph.se3_refine.weight)
+        self.graph.se3_refine = torch.nn.Embedding(len(self.train_loader.dataset.list),6).to(opt.device) # TODO(bagro): remove this magick 100 number
+        torch.nn.init.zeros_(self.graph.se3_refine.weight)
 
     def setup_optimizer(self,opt):
         super().setup_optimizer(opt)
@@ -220,42 +214,15 @@ class Graph(nerf.Graph):
             self.nerf_fine = NeRF(opt)
         self.pose_eye = torch.eye(3,4).to(opt.device)
 
-        max_wavelength = 10_000.0
-        d_model = 128
-        input_dim = 1
-        div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(max_wavelength) / d_model))  # d_model/2
-        self.se3_refine = nn.Sequential(
-            nn.Linear(d_model * input_dim, d_model, bias=False),
-            nn.LayerNorm(d_model),
-            nn.ReLU(),
-            nn.Linear(d_model, d_model, bias=False),
-            nn.LayerNorm(d_model),
-            nn.ReLU(),
-            nn.Linear(d_model, 6, bias=False),
-        ).to(opt.device)
-        self.register_buffer("div_term", div_term)
-        self.initialize_layers()
-
-    def initialize_layers(self):
-        for i, layer in enumerate(self.se3_refine):
-            if isinstance(layer, nn.Linear):
-                nn.init.kaiming_normal_(layer.weight, mode='fan_out', nonlinearity='relu')
-                if i == len(self.se3_refine) - 1:
-                    layer.weight.data *= 0.01 * (1/layer.weight.shape[1]) 
-
     def interpolate_se3_refine(self, times):
         # times: values in [0, 1]
-        pos_div = times.float() * self.div_term
-        pos_emb = get_embedding(pos_div)
-        se3_refine = self.se3_refine(pos_emb)
-        pose_refine = camera.lie.se3_to_SE3(se3_refine)
-        # se3_refine = self.se3_refine.weight[None, None] # (1, 1, N, 6)
-        # se3_refine = se3_refine.permute(0, 3, 1, 2) # (1, 6, 1, N)
-        # # sample `weight` at `times`:
-        # times = 2 * times - 1 # (S, 1)
-        # times = torch.concat((times, 0.5 * torch.ones_like(times)), dim=-1)[None, None] # (1, 1, S, 2)
-        # sampled_se3_refine = torch.nn.functional.grid_sample(se3_refine, times.float(), align_corners=False)[0, :, 0].transpose(0, 1) # (6, S)
-        # pose_refine = camera.lie.se3_to_SE3(sampled_se3_refine)
+        se3_refine = self.se3_refine.weight[None, None] # (1, 1, N, 6)
+        se3_refine = se3_refine.permute(0, 3, 1, 2) # (1, 6, 1, N)
+        # sample `weight` at `times`:
+        times = 2 * times - 1 # (S, 1)
+        times = torch.concat((times, 0.5 * torch.ones_like(times)), dim=-1)[None, None] # (1, 1, S, 2)
+        sampled_se3_refine = torch.nn.functional.grid_sample(se3_refine, times.float(), align_corners=False)[0, :, 0].transpose(0, 1) # (6, S)
+        pose_refine = camera.lie.se3_to_SE3(sampled_se3_refine)
         return pose_refine 
 
     def get_pose(self,opt,var,mode=None):
