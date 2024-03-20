@@ -1,7 +1,7 @@
 _parent_: options/barf_llff.yaml
 
 data:                                                       # data options
-    root: "/home/quinlan/school/pyslam/videos/"
+    root: 
     dataset: colmap                                   # dataset name
     scene: "painting"                                     # scene name
     image_size: [1440,1920]                                 # input image sizes [height,width]
