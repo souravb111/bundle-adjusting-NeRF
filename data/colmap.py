@@ -88,10 +88,12 @@ class Dataset(base.Dataset):
         random.shuffle(all_inds)
 
         num_val_split = int(len(items) * self.opt.data.val_ratio)
-        if self.split == "train":
+        if self.split != "train":
             items = [items[i] for i in all_inds[:-num_val_split]]
-        else:
-            items = [items[i] for i in all_inds[-num_val_split:]]
+        #if self.split == "train":
+        #    items = [items[i] for i in all_inds[:-num_val_split]]
+        #else:
+        #    items = [items[i] for i in all_inds[-num_val_split:]]
 
         items = sorted(items, key=lambda i: self.get_time(self.transforms["frames"][i], i))
 
