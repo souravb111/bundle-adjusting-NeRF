@@ -89,7 +89,7 @@ class Dataset(base.Dataset):
 
         num_val_split = int(len(items) * self.opt.data.val_ratio)
         if self.split != "train":
-            items = [items[i] for i in all_inds[:-num_val_split]]
+            items = [items[i] for i in all_inds[-num_val_split:]]
         #if self.split == "train":
         #    items = [items[i] for i in all_inds[:-num_val_split]]
         #else:
