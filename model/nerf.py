@@ -22,7 +22,7 @@ class Model(base.Model):
     def __init__(self,opt):
         self.max_iterations = -1
         self.min_time = 0.03
-        if hasattr(opt.max_iterations):
+        if hasattr(opt, "max_iterations"):
             self.max_iterations = opt.max_iterations
         super().__init__(opt)
         self.lpips_loss = lpips.LPIPS(net="alex").to(opt.device)
