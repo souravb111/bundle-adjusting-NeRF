@@ -174,12 +174,12 @@ def merge_centers(centers):
         center_merged[2] += [float(c1[2]),float(c2[2]),None]
     return center_merged
 
-def plot_save_poses(opt,fig,pose,pose_ref=None,path=None,ep=None):
+def plot_save_poses(opt,fig,pose,pose_ref=None,path=None,ep=None,cam_depth=None):
     # get the camera meshes
-    _,_,cam = get_camera_mesh(pose,depth=opt.visdom.cam_depth)
+    _,_,cam = get_camera_mesh(pose,depth=opt.visdom.cam_depth if cam_depth is None else cam_depth)
     cam = cam.numpy()
     if pose_ref is not None:
-        _,_,cam_ref = get_camera_mesh(pose_ref,depth=opt.visdom.cam_depth)
+        _,_,cam_ref = get_camera_mesh(pose_ref,depth=opt.visdom.cam_depth if cam_depth is None else cam_depth)
         cam_ref = cam_ref.numpy()
     # set up plot window(s)
     plt.title("epoch {}".format(ep))
@@ -209,6 +209,7 @@ def plot_save_poses(opt,fig,pose,pose_ref=None,path=None,ep=None):
     plt.savefig(png_fname,dpi=75)
     # clean up
     plt.clf()
+    return png_fname
 
 def plot_save_poses_blender(opt,fig,pose,pose_ref=None,path=None,ep=None):
     # get the camera meshes

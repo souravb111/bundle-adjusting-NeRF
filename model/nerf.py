@@ -1,3 +1,5 @@
+import imageio
+from matplotlib import pyplot as plt
 import numpy as np
 import os,sys,time
 import torch
@@ -79,6 +81,17 @@ class Model(base.Model):
                 temp_var = {}
                 proportion_accessible = self.it / self.image_sched_max_iters
                 mask = var['time'] < max(self.image_sched_min_time, proportion_accessible)
+                old_mask = var['time'] < max(self.image_sched_min_time, (self.it - 1) / self.image_sched_max_iters)
+
+                if mask.sum() != old_mask.sum(): # visualize poses
+                    fig = plt.figure(figsize=(10,10) if opt.data.dataset=="blender" else (16,8))
+                    cam_path = "{}/poses".format(opt.output_path)
+                    os.makedirs(cam_path,exist_ok=True)
+                    pose,pose_ref = self.get_all_training_poses(opt)
+                    png_fname = util_vis.plot_save_poses(opt,fig,pose.cpu(),pose_ref=pose_ref.cpu(),path=cam_path,ep=self.it,cam_depth=1.0)
+                    # rgb = torch.tensor(imageio.imread(png_fname)).permute(2,0,1)
+                    # util_vis.tb_image(opt,self.tb,self.it,"train","poses",rgb)
+
                 for key, val in var.items():
                     temp_var[key] = val[mask]
                 self.mask_update(mask)
