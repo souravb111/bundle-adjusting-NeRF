@@ -20,10 +20,11 @@ import camera
 class Model(base.Model):
 
     def __init__(self,opt):
-        self.max_iterations = -1
-        self.min_time = 0.03
-        if hasattr(opt, "max_iterations"):
-            self.max_iterations = opt.max_iterations
+        self.image_sched_max_iters = -1
+        self.image_sched_min_time = 0.1
+        if hasattr(opt, "image_sched_max_iters"):
+            self.image_sched_max_iters = opt.image_sched_max_iters
+            self.image_sched_min_time = opt.image_sched_min_time
         super().__init__(opt)
         self.lpips_loss = lpips.LPIPS(net="alex").to(opt.device)
 
@@ -74,10 +75,10 @@ class Model(base.Model):
         for self.it in loader:
             if self.it<self.iter_start: continue
             # set var to all available images
-            if self.max_iterations > 0:
+            if self.image_sched_max_iters > 0:
                 temp_var = {}
-                proportion_accessible = self.it / self.max_iterations
-                mask = var['time'] < self.min_time + proportion_accessible
+                proportion_accessible = self.it / self.image_sched_max_iters
+                mask = var['time'] < max(self.image_sched_min_time, proportion_accessible)
                 for key, val in var.items():
                     temp_var[key] = val[mask]
                 self.mask_update(mask)
