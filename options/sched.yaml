@@ -3,11 +3,11 @@ _parent_: options/colmap.yaml
 schedule:
   init_num_iters: 10000
   init_num_images: 10
-  per_image_num_iters: 1000
+  per_image_num_iters: 2000
   finalize_num_iters: 20000
   # lr
-  pose_lr: 1.0e-3
-  pose_lr_end: 1.0e-3
+  pose_lr: 3.0e-4
+  pose_lr_end: 1.0e-6
   # loss weighting
   initial_relative_loss_weight: 0.1
   final_relative_loss_weight: 1.0
