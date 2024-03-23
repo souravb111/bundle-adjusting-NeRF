@@ -17,7 +17,7 @@
             "request": "launch",
             "program": "train.py",
             "console": "integratedTerminal",
-            "args": ["--group=debug","--name=debug_barf_sched","--yaml=sched","--data.scene=shoes","--model=barf_sched","--visdom=False","--data.root=/home/bagro/CSC2530GroupProject/data/"],
+            "args": ["--group=debug","--name=debug_barf_sched","--yaml=sched_debug","--data.scene=shoes","--model=barf_sched","--visdom=False","--data.root=/home/bagro/CSC2530GroupProject/data/"],
         }
     ]
 }

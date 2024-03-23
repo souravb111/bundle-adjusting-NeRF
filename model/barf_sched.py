@@ -31,10 +31,11 @@ class DelayedExponentialLR(torch.optim.lr_scheduler.LRScheduler):
 
     def _get_closed_form_lr(self):
         if self.last_epoch < self.start_epoch:
-            return self.base_lrs
+            return [0.0 for _ in self.base_lrs]
         else:
             relative_epoch = self.last_epoch - self.start_epoch
-            return [base_lr * self.gamma ** relative_epoch for base_lr in self.base_lrs]
+            res = [base_lr * self.gamma ** relative_epoch for base_lr in self.base_lrs]
+            return res
 
 class Model(nerf.Model):
 
@@ -48,8 +49,10 @@ class Model(nerf.Model):
             # pre-generate synthetic pose perturbation
             se3_noise = torch.randn(len(self.train_data),6,device=opt.device)*opt.camera.noise
             self.graph.pose_noise = camera.lie.se3_to_SE3(se3_noise)
-        self.graph.se3_refine = torch.nn.Embedding(len(self.train_data),6).to(opt.device)
-        torch.nn.init.zeros_(self.graph.se3_refine.weight)
+        self.graph.se3_refine = torch.nn.ModuleList([torch.nn.Embedding(1, 6).to(opt.device) for _ in range(len(self.train_data))])
+        # self.graph.se3_refine = torch.nn.Embedding(len(self.train_data),6).to(opt.device)
+        for i in range(len(self.train_data)):
+            torch.nn.init.zeros_(self.graph.se3_refine[i].weight)
 
         num_images = len(self.train_data)
         self.max_iters = opt.schedule.init_num_iters + ((num_images - opt.schedule.init_num_images) * opt.schedule.per_image_num_iters) + opt.schedule.finalize_num_iters
@@ -65,7 +68,19 @@ class Model(nerf.Model):
             end_step = start_step + opt.schedule.duration_increase
             # cosine increase from 0.0 to 1.0 over duration increase
             self.per_image_loss_weighting.append(
-                lambda it: 0.0 if it < start_step else (0.5 * (1.0 - np.cos(np.pi * (it - start_step) / (end_step - start_step))) if it < end_step else 1.0)
+                lambda it, ss=start_step, es=end_step: 0.0 if it < ss else (0.5 * (1.0 - np.cos(np.pi * (it - ss) / (es - ss))) if it < es else 1.0)
+            )
+
+        self.pose_lr_schedules = []
+        # exponential decay from pose_lr to pose_lr_end over duration
+        self.pose_lr_schedules.append(
+            lambda it: opt.schedule.pose_lr * (opt.schedule.pose_lr_end / opt.schedule.pose_lr) ** (it / self.max_iters)
+        )
+        for i in range(opt.schedule.init_num_images, len(self.train_data)):
+            start_step = opt.schedule.init_num_iters + ((i - opt.schedule.init_num_images) * opt.schedule.per_image_num_iters)
+            # 0 until start step, then exponential decay
+            self.pose_lr_schedules.append(
+                lambda it, ss=start_step: 0.0 if it < ss else opt.schedule.pose_lr * (opt.schedule.pose_lr_end / opt.schedule.pose_lr) ** ((it - ss) / (self.max_iters - ss))
             )
 
 
@@ -117,57 +132,35 @@ class Model(nerf.Model):
     def mask_update(self, mask):
         top_index = mask.nonzero().max()
         with torch.no_grad():
-            self.graph.se3_refine.weight[top_index + 1:] = self.graph.se3_refine.weight[top_index:top_index+1]
+            for i in range(top_index+1, len(self.train_data)):
+                self.graph.se3_refine[i].weight = self.graph.se3_refine[top_index].weight
 
     def setup_optimizer(self,opt):
         super().setup_optimizer(opt)
-        optimizers = []
-        schedulers = []
         optimizer = getattr(torch.optim,opt.optim.algo)
-        self.optim_pose_init = optimizer(
+        # make a parameter group for each self.graph.se3_refine.weight
+        self.optim_pose = optimizer(
             [
-                dict(params=torch.nn.Parameter(self.graph.se3_refine.weight[:opt.schedule.init_num_images]), lr=opt.optim.lr_pose)
+                dict(params=self.graph.se3_refine[:opt.schedule.init_num_images].parameters(), lr=opt.schedule.pose_lr),
+            ] + 
+            [
+                dict(params=self.graph.se3_refine[i:i+1].parameters(), lr=opt.schedule.pose_lr) for i in range(opt.schedule.init_num_images, len(self.train_data))
             ]
         )
-        # set up pose schedulers
-        initial_scheduler = DelayedExponentialLR(
-            self.optim_pose_init,
-            gamma=(opt.schedule.pose_lr_end/opt.schedule.pose_lr)**(1./self.max_iters),
-            start_epoch=0
-        )
-        optimizers.append(self.optim_pose_init)
-        schedulers.append(initial_scheduler)
-
-        for i in range(opt.schedule.init_num_images, len(self.train_data)):
-            self.optim_pose = optimizer(
-                [
-                    dict(params=torch.nn.Parameter(self.graph.se3_refine.weight[i:i+1]), lr=opt.optim.lr_pose)
-                ]
-            )
-            optimizers.append(self.optim_pose)
-            start_iter = opt.schedule.init_num_iters + ((i - opt.schedule.init_num_images) * opt.schedule.per_image_num_iters)
-            schedulers.append(DelayedExponentialLR(
-                self.optim_pose,
-                gamma=(opt.schedule.pose_lr_end/opt.schedule.pose_lr)**(1./(self.max_iters - start_iter)),
-                start_epoch=start_iter
-            ))
-        self.optimizers = optimizers
-        self.schedulers = schedulers
 
     def train_iteration(self,opt,var,loader):
         # self.optim_pose.zero_grad()
-        for optimizer in self.optimizers:
-            optimizer.zero_grad()
+        self.optim_pose.zero_grad()
         # if opt.optim.warmup_pose:
         #     # simple linear warmup of pose learning rate
         #     self.optim_pose.param_groups[0]["lr_orig"] = self.optim_pose.param_groups[0]["lr"] # cache the original learning rate
         #     self.optim_pose.param_groups[0]["lr"] *= min(1,self.it/opt.optim.warmup_pose)
         loss = super().train_iteration(opt,var,loader)
-        # step all optimizers and all schedulers
-        for optimizer in self.optimizers:
-            optimizer.step()
-        for scheduler in self.schedulers:
-            scheduler.step(self.it)
+        self.optim_pose.step()
+        # update lr
+        for i, param_group in enumerate(self.optim_pose.param_groups):
+            param_group["lr"] = self.pose_lr_schedules[i](self.it)
+
         self.graph.nerf.progress.data.fill_(self.it/self.max_iters)
         return loss
 
@@ -182,9 +175,10 @@ class Model(nerf.Model):
         super().log_scalars(opt,var,loss,metric=metric,step=step,split=split)
         if split=="train":
             # log learning rate
-            for i,optimizer in enumerate(self.optimizers):
-                lr = optimizer.param_groups[0]["lr"]
+            for i,param_group in enumerate(self.optim_pose.param_groups):
+                lr = param_group["lr"]
                 self.tb.add_scalar("{0}/{1}".format(split,f"lr_pose_{i}"),lr,step)
+                self.tb.add_scalar("{0}/{1}".format(split,f"loss_weight_{i}"),self.graph.per_image_loss_weighting[i],step)
         # compute pose error
         if split=="train" and opt.data.dataset in ["blender","llff"]:
             pose,pose_GT = self.get_all_training_poses(opt)
@@ -212,7 +206,7 @@ class Model(nerf.Model):
                 pose = camera.pose.compose([self.graph.pose_noise,pose])
         else: pose = self.graph.pose_eye
         # add learned pose correction to all training data
-        pose_refine = camera.lie.se3_to_SE3(self.graph.se3_refine.weight)
+        pose_refine = camera.lie.se3_to_SE3(self.graph.get_se3_refine_weight())
         pose = camera.pose.compose([pose_refine,pose])
         return pose,pose_GT
 
@@ -326,7 +320,10 @@ class Graph(nerf.Graph):
         if opt.nerf.fine_sampling:
             self.nerf_fine = NeRF(opt)
         self.pose_eye = torch.eye(3,4).to(opt.device)
-        per_image_loss_weighting = None
+        self.per_image_loss_weighting = None
+
+    def get_se3_refine_weight(self):
+        return torch.concat([self.se3_refine[i].weight for i in range(len(self.se3_refine))], dim=0)
 
     def get_pose(self,opt,var,mode=None):
         # if mode=="train":
@@ -338,7 +335,7 @@ class Graph(nerf.Graph):
             else: pose = var.pose
         else: pose = self.pose_eye
         # add learnable pose correction
-        var.se3_refine = self.se3_refine.weight[var.idx]
+        var.se3_refine = self.get_se3_refine_weight()[var.idx]
         pose_refine = camera.lie.se3_to_SE3(var.se3_refine)
         pose = camera.pose.compose([pose_refine,pose])
         # elif mode in ["val","eval","test-optim"]:
