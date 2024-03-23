@@ -133,7 +133,7 @@ class Model(nerf.Model):
         top_index = mask.nonzero().max()
         with torch.no_grad():
             for i in range(top_index+1, len(self.train_data)):
-                self.graph.se3_refine[i].weight = self.graph.se3_refine[top_index].weight
+                self.graph.se3_refine[i].weight.copy_(self.graph.se3_refine[top_index].weight.clone())
 
     def setup_optimizer(self,opt):
         super().setup_optimizer(opt)
@@ -179,6 +179,21 @@ class Model(nerf.Model):
                 lr = param_group["lr"]
                 self.tb.add_scalar("{0}/{1}".format(split,f"lr_pose_{i}"),lr,step)
                 self.tb.add_scalar("{0}/{1}".format(split,f"loss_weight_{i}"),self.graph.per_image_loss_weighting[i],step)
+            if step%2000 == 0:
+                fig = plt.figure(figsize=(10,10) if opt.data.dataset=="blender" else (16,8))
+                cam_path = "{}/training_poses".format(opt.output_path)
+                os.makedirs(cam_path,exist_ok=True)
+                pose,pose_ref = self.get_all_training_poses(opt)
+                if opt.data.dataset in ["blender","llff"]:
+                    pose_aligned,_ = self.prealign_cameras(opt,pose,pose_ref)
+                    pose_aligned,pose_ref = pose_aligned.detach().cpu(),pose_ref.detach().cpu()
+                    dict(
+                        blender=util_vis.plot_save_poses_blender,
+                        llff=util_vis.plot_save_poses,
+                    )[opt.data.dataset](opt,fig,pose_aligned,pose_ref=pose_ref,path=cam_path,ep=step)
+                else:
+                    pose = pose.detach().cpu()
+                    util_vis.plot_save_poses(opt,fig,pose,pose_ref=None,path=cam_path,ep=step,cam_depth=0.2)
         # compute pose error
         if split=="train" and opt.data.dataset in ["blender","llff"]:
             pose,pose_GT = self.get_all_training_poses(opt)
