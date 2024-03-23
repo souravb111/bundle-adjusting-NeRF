@@ -201,12 +201,13 @@ class Model(base.Model):
         else:
             pose_pred,pose_GT = self.get_all_training_poses(opt)
             poses = pose_pred if opt.model=="barf" else pose_GT
-            if opt.model=="barf" and opt.data.dataset=="llff":
-                _,sim3 = self.prealign_cameras(opt,pose_pred,pose_GT)
-                scale = sim3.s1/sim3.s0
-            else: scale = 1
+            # if opt.model=="barf" and opt.data.dataset=="llff":
+            #     _,sim3 = self.prealign_cameras(opt,pose_pred,pose_GT)
+            #     scale = sim3.s1/sim3.s0
+            # else: scale = 1
+            scale = 1
             # rotate novel views around the "center" camera of all poses
-            idx_center = (poses-poses.mean(dim=0,keepdim=True))[...,3].norm(dim=-1).argmin()
+            idx_center = 0 # (poses-poses.mean(dim=0,keepdim=True))[...,3].norm(dim=-1).argmin()
             pose_novel = camera.get_novel_view_poses(opt,poses[idx_center],N=60,scale=scale).to(opt.device)
             # render the novel views
             novel_path = "{}/novel_view".format(opt.output_path)
@@ -227,6 +228,41 @@ class Model(base.Model):
             depth_vid_fname = "{}/novel_view_depth.mp4".format(opt.output_path)
             os.system("ffmpeg -y -framerate 30 -i {0}/rgb_%d.png -pix_fmt yuv420p {1} >/dev/null 2>&1".format(novel_path,rgb_vid_fname))
             os.system("ffmpeg -y -framerate 30 -i {0}/depth_%d.png -pix_fmt yuv420p {1} >/dev/null 2>&1".format(novel_path,depth_vid_fname))
+
+    @torch.no_grad()
+    def generate_videos_pose(self,opt):
+        self.graph.eval()
+        fig = plt.figure(figsize=(10,10) if opt.data.dataset=="blender" else (16,8))
+        cam_path = "{}/poses".format(opt.output_path)
+        os.makedirs(cam_path,exist_ok=True)
+        ep_list = []
+        for ep in range(0,opt.max_iter+1,opt.freq.ckpt):
+            # load checkpoint (0 is random init)
+            if ep!=0:
+                try: util.restore_checkpoint(opt,self,resume=ep)
+                except: continue
+            # get the camera poses
+            _,pose = self.get_all_training_poses(opt)
+            if opt.data.dataset in ["blender","llff"]:
+                pose_aligned,_ = self.prealign_cameras(opt,pose,pose_ref)
+                pose_aligned,pose_ref = pose_aligned.detach().cpu(),pose_ref.detach().cpu()
+                dict(
+                    blender=util_vis.plot_save_poses_blender,
+                    llff=util_vis.plot_save_poses,
+                )[opt.data.dataset](opt,fig,pose_aligned,pose_ref=pose_ref,path=cam_path,ep=ep)
+            else:
+                pose = pose.detach().cpu()
+                util_vis.plot_save_poses(opt,fig,pose,pose_ref=None,path=cam_path,ep=ep,cam_depth=0.2)
+            ep_list.append(ep)
+        plt.close()
+        # write videos
+        print("writing videos...")
+        list_fname = "{}/temp.list".format(cam_path)
+        with open(list_fname,"w") as file:
+            for ep in ep_list: file.write("file {}.png\n".format(ep))
+        cam_vid_fname = "{}/poses.mp4".format(opt.output_path)
+        os.system("ffmpeg -y -r 30 -f concat -i {0} -pix_fmt yuv420p {1} >/dev/null 2>&1".format(list_fname,cam_vid_fname))
+        os.remove(list_fname)
 
 # ============================ computation graph for forward/backprop ============================
 

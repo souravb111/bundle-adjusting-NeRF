@@ -196,7 +196,7 @@ class Model(nerf.Model):
                 )[opt.data.dataset](opt,fig,pose_aligned,pose_ref=pose_ref,path=cam_path,ep=ep)
             else:
                 pose = pose.detach().cpu()
-                util_vis.plot_save_poses(opt,fig,pose,pose_ref=None,path=cam_path,ep=ep)
+                util_vis.plot_save_poses(opt,fig,pose,pose_ref=None,path=cam_path,ep=ep,cam_depth=0.2)
             ep_list.append(ep)
         plt.close()
         # write videos
