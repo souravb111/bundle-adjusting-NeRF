@@ -158,9 +158,9 @@ class Model():
             #     loss_val[key] += loss[key]*len(var.idx)
             # loader.set_postfix(loss="{:.3f}".format(loss.all))
             self.visualize(opt,var,step=ep,split="val",ind=it)
-        for key in loss_val: loss_val[key] /= len(self.test_data)
-        self.log_scalars(opt,var,loss_val,step=ep,split="val")
-        log.loss_val(opt,loss_val.all)
+        # for key in loss_val: loss_val[key] /= len(self.test_data)
+        # self.log_scalars(opt,var,loss_val,step=ep,split="val")
+        # log.loss_val(opt,loss_val.all)
 
     @torch.no_grad()
     def log_scalars(self,opt,var,loss,metric=None,step=0,split="train"):
