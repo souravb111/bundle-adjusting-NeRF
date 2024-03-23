@@ -3,13 +3,13 @@ _parent_: options/barf_llff.yaml
 data:                                                       # data options
     root: 
     dataset: colmap                                   # dataset name
-    scene: "painting"                                     # scene name
-    image_size: [1440,1920]                                 # input image sizes [height,width]
+    scene: "shoes"                                     # scene name
+    image_size: [1080,1920]                                 # input image sizes [height,width]
     # subsample: 5
 
 nerf:
   rand_rays: 2048                                           # number of random rays for each step
 
 freq:
-  vis: 20000
-  val: 20000
+  vis: 10000
+  val: 10000
