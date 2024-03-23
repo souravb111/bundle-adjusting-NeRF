@@ -151,13 +151,13 @@ class Model():
             var = edict(batch)
             var = util.move_to_device(var,opt.device)
             var = self.graph.forward(opt,var,mode="val")
-            loss = self.graph.compute_loss(opt,var,mode="val")
-            loss = self.summarize_loss(opt,var,loss)
-            for key in loss:
-                loss_val.setdefault(key,0.)
-                loss_val[key] += loss[key]*len(var.idx)
-            loader.set_postfix(loss="{:.3f}".format(loss.all))
-            if it==0: self.visualize(opt,var,step=ep,split="val")
+            # loss = self.graph.compute_loss(opt,var,mode="val")
+            # loss = self.summarize_loss(opt,var,loss)
+            # for key in loss:
+            #     loss_val.setdefault(key,0.)
+            #     loss_val[key] += loss[key]*len(var.idx)
+            # loader.set_postfix(loss="{:.3f}".format(loss.all))
+            if it==0: self.visualize(opt,var,step=ep,split="val",ind=it)
         for key in loss_val: loss_val[key] /= len(self.test_data)
         self.log_scalars(opt,var,loss_val,step=ep,split="val")
         log.loss_val(opt,loss_val.all)
@@ -173,7 +173,7 @@ class Model():
                 self.tb.add_scalar("{0}/{1}".format(split,key),value,step)
 
     @torch.no_grad()
-    def visualize(self,opt,var,step=0,split="train"):
+    def visualize(self,opt,var,step=0,split="train",ind=0):
         raise NotImplementedError
 
     def save_checkpoint(self,opt,ep=0,it=0,latest=False):

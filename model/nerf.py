@@ -62,6 +62,7 @@ class Model(base.Model):
         self.ep = 0 # dummy for timer
         # training
         # if self.iter_start==0: self.validate(opt,0)
+        # self.validate(opt,0)
 
         # pre-compute rays for training:
         loader = tqdm.trange(opt.max_iter,desc="training",leave=False)
@@ -126,21 +127,21 @@ class Model(base.Model):
             self.tb.add_scalar("{0}/{1}".format(split,"PSNR_fine"),psnr,step)
 
     @torch.no_grad()
-    def visualize(self,opt,var,step=0,split="train",eps=1e-10):
+    def visualize(self,opt,var,step=0,split="train",eps=1e-10,ind=0):
         if opt.tb:
-            util_vis.tb_image(opt,self.tb,step,split,"image",var.image)
+            util_vis.tb_image(opt,self.tb,step,split,f"image_{ind}",var.image)
             if not opt.nerf.rand_rays or split!="train":
                 invdepth = (1-var.depth)/var.opacity if opt.camera.ndc else 1/(var.depth/var.opacity+eps)
                 rgb_map = var.rgb.view(-1,opt.H,opt.W,3).permute(0,3,1,2) # [B,3,H,W]
                 invdepth_map = invdepth.view(-1,opt.H,opt.W,1).permute(0,3,1,2) # [B,1,H,W]
-                util_vis.tb_image(opt,self.tb,step,split,"rgb",rgb_map)
-                util_vis.tb_image(opt,self.tb,step,split,"invdepth",invdepth_map)
+                util_vis.tb_image(opt,self.tb,step,split,f"rgb_{ind}",rgb_map)
+                util_vis.tb_image(opt,self.tb,step,split,f"invdepth_{ind}",invdepth_map)
                 if opt.nerf.fine_sampling:
                     invdepth = (1-var.depth_fine)/var.opacity_fine if opt.camera.ndc else 1/(var.depth_fine/var.opacity_fine+eps)
                     rgb_map = var.rgb_fine.view(-1,opt.H,opt.W,3).permute(0,3,1,2) # [B,3,H,W]
                     invdepth_map = invdepth.view(-1,opt.H,opt.W,1).permute(0,3,1,2) # [B,1,H,W]
-                    util_vis.tb_image(opt,self.tb,step,split,"rgb_fine",rgb_map)
-                    util_vis.tb_image(opt,self.tb,step,split,"invdepth_fine",invdepth_map)
+                    util_vis.tb_image(opt,self.tb,step,split,f"rgb_fine_{ind}",rgb_map)
+                    util_vis.tb_image(opt,self.tb,step,split,f"invdepth_fine_{ind}",invdepth_map)
 
     @torch.no_grad()
     def get_all_training_poses(self,opt):
