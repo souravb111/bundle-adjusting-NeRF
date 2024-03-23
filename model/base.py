@@ -157,7 +157,7 @@ class Model():
             #     loss_val.setdefault(key,0.)
             #     loss_val[key] += loss[key]*len(var.idx)
             # loader.set_postfix(loss="{:.3f}".format(loss.all))
-            if it==0: self.visualize(opt,var,step=ep,split="val",ind=it)
+            self.visualize(opt,var,step=ep,split="val",ind=it)
         for key in loss_val: loss_val[key] /= len(self.test_data)
         self.log_scalars(opt,var,loss_val,step=ep,split="val")
         log.loss_val(opt,loss_val.all)
