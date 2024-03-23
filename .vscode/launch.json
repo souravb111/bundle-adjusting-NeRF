@@ -17,7 +17,7 @@
             "request": "launch",
             "program": "train.py",
             "console": "integratedTerminal",
-            "args": ["--group=painting","--name=barf_sched_slower","--yaml=colmap","--data.scene=painting","--model=barf","--visdom=False","--data.image_size=[1080,1920]","--image_sched_max_iters=100000","--image_sched_min_time=0.1","--data.root=/home/bagro/CSC2530GroupProject/data/"],
+            "args": ["--group=debug","--name=debug_barf_sched","--yaml=sched","--data.scene=shoes","--model=barf_sched","--visdom=False","--data.root=/home/bagro/CSC2530GroupProject/data/"],
         }
     ]
 }

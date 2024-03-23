@@ -23,19 +23,11 @@ class DelayedExponentialLR(torch.optim.lr_scheduler.LRScheduler):
 
     def __init__(self, optimizer, gamma, start_epoch=0, last_epoch=-1, verbose="deprecated"):
         self.gamma = gamma
-        super().__init__(optimizer, last_epoch, verbose)
         self.start_epoch = start_epoch
+        super().__init__(optimizer, last_epoch, verbose)
 
     def get_lr(self):
-        assert False, "Not implemented, must use closed for LR"
-        if not self._get_lr_called_within_step:
-            warnings.warn("To get the last learning rate computed by the scheduler, "
-                          "please use `get_last_lr()`.", UserWarning)
-
-        if self.last_epoch == 0:
-            return [group['lr'] for group in self.optimizer.param_groups]
-        return [group['lr'] * self.gamma
-                for group in self.optimizer.param_groups]
+        return self._get_closed_form_lr()
 
     def _get_closed_form_lr(self):
         if self.last_epoch < self.start_epoch:
@@ -48,24 +40,7 @@ class Model(nerf.Model):
 
     def __init__(self,opt):
         super().__init__(opt)
-        num_images = len(self.train_data)
-        self.max_iters = opt.schedule.init_num_iters + ((num_images - opt.schedule.init_num_images) * opt.schedule.per_image_num_iters) + opt.schedule.finalize_num_iters
-        print(f"Max iters: {self.max_iters}")
 
-        self.per_image_loss_weighting = []
-        for i in range(opt.init_num_images):
-            self.per_image_loss_weighting.append(
-                lambda it: 1.0
-            )
-        for i in range(opt.init_num_images, len(self.train_data)):
-            start_step = opt.schedule.init_num_iters + ((i - opt.schedule.init_num_images) * opt.schedule.per_image_num_iters)
-            end_step = start_step + opt.schedule.duration_increase
-            # cosine increase from 0.0 to 1.0 over duration increase
-            self.per_image_loss_weighting.append(
-                lambda it: 0.0 if it < start_step else (0.5 * (1.0 - np.cos(np.pi * (it - start_step) / (end_step - start_step))) if it < end_step else 1.0)
-            )
-
-        self.graph.per_image_loss_weighting = self.per_image_loss_weighting
 
     def build_networks(self,opt):
         super().build_networks(opt)
@@ -75,6 +50,24 @@ class Model(nerf.Model):
             self.graph.pose_noise = camera.lie.se3_to_SE3(se3_noise)
         self.graph.se3_refine = torch.nn.Embedding(len(self.train_data),6).to(opt.device)
         torch.nn.init.zeros_(self.graph.se3_refine.weight)
+
+        num_images = len(self.train_data)
+        self.max_iters = opt.schedule.init_num_iters + ((num_images - opt.schedule.init_num_images) * opt.schedule.per_image_num_iters) + opt.schedule.finalize_num_iters
+        print(f"Max iters: {self.max_iters}")
+
+        self.per_image_loss_weighting = []
+        for i in range(opt.schedule.init_num_images):
+            self.per_image_loss_weighting.append(
+                lambda it: 1.0
+            )
+        for i in range(opt.schedule.init_num_images, len(self.train_data)):
+            start_step = opt.schedule.init_num_iters + ((i - opt.schedule.init_num_images) * opt.schedule.per_image_num_iters)
+            end_step = start_step + opt.schedule.duration_increase
+            # cosine increase from 0.0 to 1.0 over duration increase
+            self.per_image_loss_weighting.append(
+                lambda it: 0.0 if it < start_step else (0.5 * (1.0 - np.cos(np.pi * (it - start_step) / (end_step - start_step))) if it < end_step else 1.0)
+            )
+
 
     def train(self,opt):
         # before training
@@ -86,11 +79,13 @@ class Model(nerf.Model):
         # self.validate(opt,0)
 
         # pre-compute rays for training:
-        loader = tqdm.trange(self.max_iter,desc="training",leave=False)
+        loader = tqdm.trange(self.max_iters,desc="training",leave=False)
         var = self.train_data.all
         self.var = var
 
         for self.it in loader:
+
+            self.graph.per_image_loss_weighting = [self.per_image_loss_weighting[i](self.it) for i in range(len(self.train_data))]
             if self.it<self.iter_start: continue
             # set var to all available images
             temp_var = {}
@@ -131,7 +126,7 @@ class Model(nerf.Model):
         optimizer = getattr(torch.optim,opt.optim.algo)
         self.optim_pose_init = optimizer(
             [
-                dict(params=self.graph.se3_refine[:opt.schedule.init_num_images].parameters(), lr=opt.optim.lr_pose)
+                dict(params=torch.nn.Parameter(self.graph.se3_refine.weight[:opt.schedule.init_num_images]), lr=opt.optim.lr_pose)
             ]
         )
         # set up pose schedulers
@@ -146,7 +141,7 @@ class Model(nerf.Model):
         for i in range(opt.schedule.init_num_images, len(self.train_data)):
             self.optim_pose = optimizer(
                 [
-                    dict(params=self.graph.se3_refine[i:i+1].parameters(), lr=opt.optim.lr_pose)
+                    dict(params=torch.nn.Parameter(self.graph.se3_refine.weight[i:i+1]), lr=opt.optim.lr_pose)
                 ]
             )
             optimizers.append(self.optim_pose)
@@ -156,6 +151,8 @@ class Model(nerf.Model):
                 gamma=(opt.schedule.pose_lr_end/opt.schedule.pose_lr)**(1./(self.max_iters - start_iter)),
                 start_epoch=start_iter
             ))
+        self.optimizers = optimizers
+        self.schedulers = schedulers
 
     def train_iteration(self,opt,var,loader):
         # self.optim_pose.zero_grad()
@@ -364,7 +361,7 @@ class Graph(nerf.Graph):
         assert self.per_image_loss_weighting is not None
         loss = (pred.contiguous()-label)**2 # (num_images, ray_idx)
         for i in range(loss.shape[0]):
-            loss[i] = self.per_image_loss_weighting[i](self.it) * loss[i]
+            loss[i] = self.per_image_loss_weighting[i] * loss[i]
         return loss.mean()
 
 class NeRF(nerf.NeRF):
