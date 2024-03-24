@@ -345,12 +345,12 @@ class Graph(nerf.Graph):
             # add the pre-generated pose perturbations
         if opt.data.dataset=="blender":
             if opt.camera.noise:
-                var.pose_noise = self.pose_noise[var.timestep]
+                var.pose_noise = self.pose_noise[var.idx]
                 pose = camera.pose.compose([var.pose_noise,var.pose])
             else: pose = var.pose
         else: pose = self.pose_eye
         # add learnable pose correction
-        var.se3_refine = self.get_se3_refine_weight()[var.timestep]
+        var.se3_refine = self.get_se3_refine_weight()[var.idx]
         pose_refine = camera.lie.se3_to_SE3(var.se3_refine)
         pose = camera.pose.compose([pose_refine,pose])
         # elif mode in ["val","eval","test-optim"]:
