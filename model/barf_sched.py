@@ -66,11 +66,12 @@ class Model(nerf.Model):
         start_finalize = self.max_iters - opt.schedule.finalize_num_iters
         if opt.schedule.finalize_reset_nerf_lr:
             self.nerf_scheduler = lambda it, sf=start_finalize: opt.optim.lr * (opt.optim.lr_end / opt.optim.lr) ** (it / self.max_iters)  if it < sf else opt.optim.lr * (opt.optim.lr_end / opt.optim.lr) ** ((it - sf) / opt.schedule.finalize_num_iters)  
+            opt.barf_c2f_start = (start_finalize + opt.schedule.finalize_num_iters * opt.barf_c2f[0]) / self.max_iters
+            opt.barf_c2f_end = (start_finalize + opt.schedule.finalize_num_iters * opt.barf_c2f[1])/ self.max_iters
         else:
             self.nerf_scheduler = lambda it: opt.optim.lr * (opt.optim.lr_end / opt.optim.lr) ** (it / self.max_iters)  
-
-        opt.barf_c2f_start = (start_finalize + opt.schedule.finalize_num_iters * opt.barf_c2f[0]) / self.max_iters
-        opt.barf_c2f_end = (start_finalize + opt.schedule.finalize_num_iters * opt.barf_c2f[1])/ self.max_iters
+            opt.barf_c2f_start = opt.barf_c2f[0]
+            opt.barf_c2f_end = opt.barf_c2f[1]
 
     def train(self,opt):
         # before training
@@ -85,6 +86,8 @@ class Model(nerf.Model):
         loader = tqdm.trange(self.max_iters,desc="training",leave=False)
         var = self.train_data.all
         self.var = var
+
+        self.graph.nerf.progress.data.fill_(self.iter_start/self.max_iters)
 
         for self.it in loader:
 

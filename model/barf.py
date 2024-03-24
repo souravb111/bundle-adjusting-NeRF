@@ -29,6 +29,12 @@ class Model(nerf.Model):
             self.graph.pose_noise = camera.lie.se3_to_SE3(se3_noise)
         self.graph.se3_refine = torch.nn.Embedding(len(self.train_data),6).to(opt.device)
         torch.nn.init.zeros_(self.graph.se3_refine.weight)
+        with torch.no_grad():
+            if hasattr(opt, "load_pose_path"):
+                c = torch.load(opt.load_pose_path)
+                for i in range(self.graph.se3_refine.weight.shape[0]):
+                    self.graph.se3_refine.weight[i].copy_(c["graph"][f"se3_refine.{i}.weight"][0].clone())
+                print("Loaded pose from", opt.load_pose_path)
 
     def mask_update(self, mask):
         top_index = mask.nonzero().max()
