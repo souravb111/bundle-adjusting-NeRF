@@ -185,9 +185,9 @@ def plot_save_poses(opt,fig,pose,pose_ref=None,path=None,ep=None,cam_depth=None)
     plt.title("epoch {}".format(ep))
     ax1 = fig.add_subplot(121,projection="3d")
     ax2 = fig.add_subplot(122,projection="3d")
-    x_min, x_max = pose[:, 0, -1].min() - 0.3, pose[:, 0, -1].max() + 0.3
-    y_min, y_max = pose[:, 1, -1].min() - 0.3, pose[:, 1, -1].max() + 0.3
-    z_min, z_max = pose[:, 2, -1].min() - 0.3, pose[:, 2, -1].max() + 0.3
+    x_min, x_max = cam[:, :, 0].min() - 0.3, cam[:, :, 0].max() + 0.3
+    y_min, y_max = cam[:, :, 1].min() - 0.3, cam[:, :, 1].max() + 0.3
+    z_min, z_max = cam[:, :, 2].min() - 0.3, cam[:, :, 2].max() + 0.3
     setup_3D_plot(ax1,elev=-90,azim=-90,lim=edict(x=(x_min,x_max),y=(y_min,y_max),z=(z_min,z_max)))
     setup_3D_plot(ax2,elev=0,azim=-90,lim=edict(x=(x_min,x_max),y=(y_min,y_max),z=(z_min,z_max)))
     ax1.set_title("forward-facing view",pad=0)
