@@ -178,6 +178,7 @@ class Model(nerf.Model):
             for i,param_group in enumerate(self.optim_pose.param_groups):
                 lr = param_group["lr"]
                 self.tb.add_scalar("{0}/{1}".format(split,f"lr_pose_{i}"),lr,step)
+            for i in range(len(self.train_data)):
                 self.tb.add_scalar("{0}/{1}".format(split,f"loss_weight_{i}"),self.graph.per_image_loss_weighting[i],step)
             if step%2000 == 0:
                 fig = plt.figure(figsize=(10,10) if opt.data.dataset=="blender" else (16,8))
