@@ -10,7 +10,7 @@ schedule:
   # loss weighting
   duration_increase: 2000
 
-  finalize_num_iters: 40000
+  finalize_num_iters: 200000
   finalize_reset_nerf_lr: True
 
 
