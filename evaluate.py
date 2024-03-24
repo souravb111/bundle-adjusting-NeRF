@@ -22,7 +22,7 @@ def main():
         m.load_dataset(opt,eval_split="test")
         m.build_networks(opt)
 
-        if opt.model=="barf":
+        if hasattr(m, "generate_videos_pose"):
             m.generate_videos_pose(opt)
 
         m.restore_checkpoint(opt)
