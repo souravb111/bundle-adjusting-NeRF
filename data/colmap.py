@@ -127,7 +127,7 @@ class Dataset(base.Dataset):
         opt = self.opt
         sample = dict(idx=idx)
         sample["time"] = self.get_time(self.transforms["frames"][frame_id], frame_id)
-        sameple["frame_id"] = frame_id
+        sample["frame_id"] = frame_id
         aug = self.generate_augmentation(opt) if self.augment else None
         image = self.get_image(opt, frame_id) # self.images[frame_id] if opt.data.preload else self.get_image(opt,frame_id)
         image = self.preprocess_image(opt,image,aug=aug)
