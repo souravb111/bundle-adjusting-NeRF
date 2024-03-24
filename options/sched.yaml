@@ -2,13 +2,15 @@ _parent_: options/colmap.yaml
 
 schedule:
   init_num_iters: 10000
-  init_num_images: 15
+  init_num_images: 35
   per_image_num_iters: 2000
-  finalize_num_iters: 20000
   # lr
   pose_lr: 3.0e-4
   pose_lr_end: 1.0e-6
   # loss weighting
-  duration_increase: 20000
+  duration_increase: 2000
+
+  finalize_num_iters: 40000
+  finalize_reset_nerf_lr: True
 
 

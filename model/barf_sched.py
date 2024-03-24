@@ -63,8 +63,14 @@ class Model(nerf.Model):
                 lambda it, ss=start_step: 0.0 if it < ss else opt.schedule.pose_lr * (opt.schedule.pose_lr_end / opt.schedule.pose_lr) ** ((it - ss) / (self.max_iters - ss))
             )
 
-        self.nerf_scheduler = lambda it: opt.optim.lr_start * (opt.optim.lr_end / opt.optim.lr) ** (it / self.max_iters) 
+        start_finalize = self.max_iters - opt.schedule.finalize_num_iters
+        if opt.schedule.finalize_reset_nerf_lr:
+            self.nerf_scheduler = lambda it, sf=start_finalize: opt.optim.lr * (opt.optim.lr_end / opt.optim.lr) ** (it / self.max_iters)  if it < sf else opt.optim.lr * (opt.optim.lr_end / opt.optim.lr) ** ((it - sf) / opt.schedule.finalize_num_iters)  
+        else:
+            self.nerf_scheduler = lambda it: opt.optim.lr * (opt.optim.lr_end / opt.optim.lr) ** (it / self.max_iters)  
 
+        opt.barf_c2f_start = (start_finalize + opt.schedule.finalize_num_iters * opt.barf_c2f[0]) / self.max_iters
+        opt.barf_c2f_end = (start_finalize + opt.schedule.finalize_num_iters * opt.barf_c2f[1])/ self.max_iters
 
     def train(self,opt):
         # before training
@@ -369,13 +375,14 @@ class NeRF(nerf.NeRF):
     def positional_encoding(self,opt,input,L): # [B,...,N]
         input_enc = super().positional_encoding(opt,input,L=L) # [B,...,2NL]
         # coarse-to-fine: smoothly mask positional encoding for BARF
-        if opt.barf_c2f is not None:
-            # set weights for different frequency bands
-            start,end = opt.barf_c2f
-            alpha = (self.progress.data-start)/(end-start)*L
-            k = torch.arange(L,dtype=torch.float32,device=opt.device)
-            weight = (1-(alpha-k).clamp_(min=0,max=1).mul_(np.pi).cos_())/2
-            # apply weights
-            shape = input_enc.shape
-            input_enc = (input_enc.view(-1,L)*weight).view(*shape)
+        assert opt.barf_c2f_start is not None and opt.barf_c2f_end is not None
+        # if opt.barf_c2f is not None:
+        # set weights for different frequency bands
+        start,end = opt.barf_c2f_start, opt.barf_c2f_end
+        alpha = (self.progress.data-start)/(end-start)*L
+        k = torch.arange(L,dtype=torch.float32,device=opt.device)
+        weight = (1-(alpha-k).clamp_(min=0,max=1).mul_(np.pi).cos_())/2
+        # apply weights
+        shape = input_enc.shape
+        input_enc = (input_enc.view(-1,L)*weight).view(*shape)
         return input_enc
