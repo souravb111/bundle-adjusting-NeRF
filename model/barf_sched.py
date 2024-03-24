@@ -17,26 +17,6 @@ import camera
 
 # ============================ main engine for training and evaluation ============================
 
-class DelayedExponentialLR(torch.optim.lr_scheduler.LRScheduler):
-    """Starts ExponentialLR at start_epoch
-    """
-
-    def __init__(self, optimizer, gamma, start_epoch=0, last_epoch=-1, verbose="deprecated"):
-        self.gamma = gamma
-        self.start_epoch = start_epoch
-        super().__init__(optimizer, last_epoch, verbose)
-
-    def get_lr(self):
-        return self._get_closed_form_lr()
-
-    def _get_closed_form_lr(self):
-        if self.last_epoch < self.start_epoch:
-            return [0.0 for _ in self.base_lrs]
-        else:
-            relative_epoch = self.last_epoch - self.start_epoch
-            res = [base_lr * self.gamma ** relative_epoch for base_lr in self.base_lrs]
-            return res
-
 class Model(nerf.Model):
 
     def __init__(self,opt):
@@ -83,6 +63,8 @@ class Model(nerf.Model):
                 lambda it, ss=start_step: 0.0 if it < ss else opt.schedule.pose_lr * (opt.schedule.pose_lr_end / opt.schedule.pose_lr) ** ((it - ss) / (self.max_iters - ss))
             )
 
+        self.nerf_scheduler = lambda it: opt.optim.lr_start * (opt.optim.lr_end / opt.optim.lr) ** (it / self.max_iters) 
+
 
     def train(self,opt):
         # before training
@@ -119,7 +101,6 @@ class Model(nerf.Model):
             temp_var = edict(temp_var)
             self.train_iteration(opt,temp_var,loader)
 
-            if opt.optim.sched: self.sched.step()
             if self.it%opt.freq.val==0: self.validate(opt,self.it)
             if self.it%opt.freq.ckpt==0: self.save_checkpoint(opt,ep=None,it=self.it)
         # after training
@@ -147,6 +128,7 @@ class Model(nerf.Model):
                 dict(params=self.graph.se3_refine[i:i+1].parameters(), lr=opt.schedule.pose_lr) for i in range(opt.schedule.init_num_images, len(self.train_data))
             ]
         )
+        self.optim = optimizer([dict(params=self.graph.nerf.parameters(),lr=opt.optim.lr)])
 
     def train_iteration(self,opt,var,loader):
         # self.optim_pose.zero_grad()
@@ -160,6 +142,7 @@ class Model(nerf.Model):
         # update lr
         for i, param_group in enumerate(self.optim_pose.param_groups):
             param_group["lr"] = self.pose_lr_schedules[i](self.it)
+        self.optim.param_groups[0]["lr"] = self.nerf_scheduler(self.it)
 
         self.graph.nerf.progress.data.fill_(self.it/self.max_iters)
         return loss
