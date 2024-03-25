@@ -201,18 +201,18 @@ class Model(base.Model):
         else:
             pose_pred,pose_GT = self.get_all_training_poses(opt)
             poses = pose_pred if "barf" in opt.model else pose_GT
-            # if opt.model=="barf" and opt.data.dataset=="llff":
-            #     _,sim3 = self.prealign_cameras(opt,pose_pred,pose_GT)
-            #     scale = sim3.s1/sim3.s0
-            # else: scale = 1
+            if opt.model=="barf" and opt.data.dataset=="llff":
+                _,sim3 = self.prealign_cameras(opt,pose_pred,pose_GT)
+                scale = sim3.s1/sim3.s0
+            else: scale = 1
             scale = 1
             # rotate novel views around the "center" camera of all poses
-            idx_center = 0 # (poses-poses.mean(dim=0,keepdim=True))[...,3].norm(dim=-1).argmin()
-            # pose_novel = camera.get_novel_view_poses(opt,poses[idx_center],N=60,scale=scale).to(opt.device)
+            idx_center = (poses-poses.mean(dim=0,keepdim=True))[...,3].norm(dim=-1).argmin()
+            pose_novel = camera.get_novel_view_poses(opt,poses[idx_center],N=60,scale=scale).to(opt.device)
             # render the novel views
             novel_path = "{}/novel_view".format(opt.output_path)
             os.makedirs(novel_path,exist_ok=True)
-            pose_novel_tqdm = tqdm.tqdm(poses,desc="rendering novel views",leave=False)
+            pose_novel_tqdm = tqdm.tqdm(pose_novel,desc="rendering novel views",leave=False)
             intr = edict(next(iter(self.test_loader))).intr[:1].to(opt.device) # grab intrinsics
             for i,pose in enumerate(pose_novel_tqdm):
                 ret = self.graph.render_by_slices(opt,pose[None],intr=intr) if opt.nerf.rand_rays else \

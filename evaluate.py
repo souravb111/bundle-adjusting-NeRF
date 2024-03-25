@@ -22,13 +22,13 @@ def main():
         m.load_dataset(opt,eval_split="test")
         m.build_networks(opt)
 
-        if hasattr(m, "generate_videos_pose"):
-            m.generate_videos_pose(opt)
 
         m.restore_checkpoint(opt)
-        if opt.data.dataset in ["blender","llff"]:
-            m.evaluate_full(opt)
-        m.generate_videos_synthesis(opt)
+        # if opt.data.dataset in ["blender","llff"]:
+        m.evaluate_full(opt)
+        if hasattr(m, "generate_videos_pose"):
+            m.generate_videos_pose(opt)
+        # m.generate_videos_synthesis(opt)
 
 if __name__=="__main__":
     main()
