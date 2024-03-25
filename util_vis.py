@@ -209,6 +209,8 @@ def plot_save_poses(opt,fig,pose,pose_ref=None,path=None,ep=None,cam_depth=None)
         ax1.scatter(cam[i,5,0],cam[i,5,1],cam[i,5,2],color=c,s=40)
         ax2.scatter(cam[i,5,0],cam[i,5,1],cam[i,5,2],color=c,s=40)
     png_fname = "{}/{}.png".format(path,ep)
+    ax1.set_aspect('equal', 'box')
+    ax2.set_aspect('equal', 'box')
     plt.savefig(png_fname,dpi=75)
     # clean up
     plt.clf()
