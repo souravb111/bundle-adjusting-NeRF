@@ -1,5 +1,5 @@
 
-path = "/home/bagro/CSC2530GroupProject/BARF/output/workout_area/barf_pose_init/quant.txt" 
+path = "/home/bagro/CSC2530GroupProject/BARF/output/plant/nerf_baseline/quant.txt" 
 
 # read the rows of the space separated csv file and avage across all rows
 with open(path, 'r') as f:
