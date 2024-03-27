@@ -333,6 +333,24 @@ class Graph(nerf.Graph):
     def get_se3_refine_weight(self):
         return torch.concat([self.se3_refine[i].weight for i in range(len(self.se3_refine))], dim=0)
 
+    @torch.enable_grad()
+    def evaluate_test_time_photometric_optim(self,opt,var):
+        # use another se3 Parameter to absorb the remaining pose errors
+        var.se3_refine_test = torch.nn.Parameter(torch.zeros(1,6,device=opt.device))
+        optimizer = getattr(torch.optim,opt.optim.algo)
+        optim_pose = optimizer([dict(params=[var.se3_refine_test],lr=opt.optim.lr_pose)])
+        iterator = tqdm.trange(opt.optim.test_iter,desc="test-time optim.",leave=False,position=1)
+        for it in iterator:
+            optim_pose.zero_grad()
+            var.pose_refine_test = camera.lie.se3_to_SE3(var.se3_refine_test)
+            var = self.graph.forward(opt,var,mode="test-optim")
+            loss = self.graph.compute_loss(opt,var,mode="test-optim")
+            loss = self.summarize_loss(opt,var,loss)
+            loss.all.backward()
+            optim_pose.step()
+            iterator.set_postfix(loss="{:.3f}".format(loss.all))
+        return var
+
     def get_pose(self,opt,var,mode=None):
         # if mode=="train":
             # add the pre-generated pose perturbations
@@ -365,10 +383,10 @@ class Graph(nerf.Graph):
 
     def MSE_loss(self,pred,label=0):
         # label is of shape (num_images, ray_idx, 3)
-        assert self.per_image_loss_weighting is not None
         loss = (pred.contiguous()-label)**2 # (num_images, ray_idx)
-        for i in range(loss.shape[0]):
-            loss[i] = self.per_image_loss_weighting[i] * loss[i]
+        if self.per_image_loss_weighting is not None:
+            for i in range(loss.shape[0]):
+                loss[i] = self.per_image_loss_weighting[i] * loss[i]
         return loss.mean()
 
 class NeRF(nerf.NeRF):
