@@ -1,0 +1,26 @@
+_parent_: options/colmap.yaml
+
+schedule:
+  init_num_iters: 10000
+  init_num_images: 30
+  per_image_num_iters: 2000
+  # lr
+  pose_lr: 3.0e-4
+  pose_lr_end: 1.0e-6
+  # loss weighting
+  duration_increase: 2000
+
+  finalize_num_iters: 200000
+  finalize_reset_nerf_lr: True
+
+  # for ablations
+  multi_pose_lr_schedule: False
+  multi_loss_weighting: True
+
+data:                                                       # data options
+    root: 
+    dataset: colmap                                   # dataset name
+    scene: "plant"                                     # scene name
+    image_size: [1920,1080]                                 # input image sizes [height,width]
+    # subsample: 5
+    val_ratio: 0.01
