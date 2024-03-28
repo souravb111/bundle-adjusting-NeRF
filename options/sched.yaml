@@ -13,4 +13,7 @@ schedule:
   finalize_num_iters: 200000
   finalize_reset_nerf_lr: True
 
+  # for ablations
+  multi_pose_lr_schedule: True
+  multi_loss_weighting: True
 

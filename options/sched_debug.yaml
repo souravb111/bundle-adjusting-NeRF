@@ -13,4 +13,6 @@ schedule:
   final_relative_loss_weight: 1.0
   duration_increase: 100
 
+  multi_pose_lr_schedule: True
+  multi_loss_weighting: True
 

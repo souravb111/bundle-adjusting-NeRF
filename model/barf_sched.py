@@ -39,29 +39,38 @@ class Model(nerf.Model):
         print(f"Max iters: {self.max_iters}")
 
         self.per_image_loss_weighting = []
-        for i in range(opt.schedule.init_num_images):
-            self.per_image_loss_weighting.append(
-                lambda it: 1.0
-            )
-        for i in range(opt.schedule.init_num_images, len(self.train_data)):
-            start_step = opt.schedule.init_num_iters + ((i - opt.schedule.init_num_images) * opt.schedule.per_image_num_iters)
-            end_step = start_step + opt.schedule.duration_increase
-            # cosine increase from 0.0 to 1.0 over duration increase
-            self.per_image_loss_weighting.append(
-                lambda it, ss=start_step, es=end_step: 0.0 if it < ss else (0.5 * (1.0 - np.cos(np.pi * (it - ss) / (es - ss))) if it < es else 1.0)
-            )
+        if opt.schedule.multi_loss_weighting:
+            for i in range(opt.schedule.init_num_images):
+                self.per_image_loss_weighting.append(
+                    lambda it: 1.0
+                )
+            for i in range(opt.schedule.init_num_images, len(self.train_data)):
+                start_step = opt.schedule.init_num_iters + ((i - opt.schedule.init_num_images) * opt.schedule.per_image_num_iters)
+                end_step = start_step + opt.schedule.duration_increase
+                # cosine increase from 0.0 to 1.0 over duration increase
+                self.per_image_loss_weighting.append(
+                    lambda it, ss=start_step, es=end_step: 0.0 if it < ss else (0.5 * (1.0 - np.cos(np.pi * (it - ss) / (es - ss))) if it < es else 1.0)
+                )
+        else:
+            for i in range(len(self.train_data)):
+                self.per_image_loss_weighting.append(
+                    lambda it: 1.0
+                )
 
         self.pose_lr_schedules = []
         # exponential decay from pose_lr to pose_lr_end over duration
-        self.pose_lr_schedules.append(
-            lambda it: opt.schedule.pose_lr * (opt.schedule.pose_lr_end / opt.schedule.pose_lr) ** (it / self.max_iters)
-        )
-        for i in range(opt.schedule.init_num_images, len(self.train_data)):
-            start_step = opt.schedule.init_num_iters + ((i - opt.schedule.init_num_images) * opt.schedule.per_image_num_iters)
-            # 0 until start step, then exponential decay
+        if opt.schedule.multi_pose_lr_schedule:
             self.pose_lr_schedules.append(
-                lambda it, ss=start_step: 0.0 if it < ss else opt.schedule.pose_lr * (opt.schedule.pose_lr_end / opt.schedule.pose_lr) ** ((it - ss) / (self.max_iters - ss))
+                lambda it: opt.schedule.pose_lr * (opt.schedule.pose_lr_end / opt.schedule.pose_lr) ** (it / self.max_iters)
             )
+            for i in range(opt.schedule.init_num_images, len(self.train_data)):
+                start_step = opt.schedule.init_num_iters + ((i - opt.schedule.init_num_images) * opt.schedule.per_image_num_iters)
+                # 0 until start step, then exponential decay
+                self.pose_lr_schedules.append(
+                    lambda it, ss=start_step: 0.0 if it < ss else opt.schedule.pose_lr * (opt.schedule.pose_lr_end / opt.schedule.pose_lr) ** ((it - ss) / (self.max_iters - ss))
+                )
+        else:
+            self.pose_lr_schedule = lambda it: opt.schedule.pose_lr * (opt.schedule.pose_lr_end / opt.schedule.pose_lr) ** (it / self.max_iters)
 
         start_finalize = self.max_iters - opt.schedule.finalize_num_iters
         if opt.schedule.finalize_reset_nerf_lr:
@@ -129,14 +138,21 @@ class Model(nerf.Model):
         super().setup_optimizer(opt)
         optimizer = getattr(torch.optim,opt.optim.algo)
         # make a parameter group for each self.graph.se3_refine.weight
-        self.optim_pose = optimizer(
-            [
-                dict(params=self.graph.se3_refine[:opt.schedule.init_num_images].parameters(), lr=opt.schedule.pose_lr),
-            ] + 
-            [
-                dict(params=self.graph.se3_refine[i:i+1].parameters(), lr=opt.schedule.pose_lr) for i in range(opt.schedule.init_num_images, len(self.train_data))
-            ]
-        )
+        if opt.schedule.multi_pose_lr_schedule:
+            self.optim_pose = optimizer(
+                [
+                    dict(params=self.graph.se3_refine[:opt.schedule.init_num_images].parameters(), lr=opt.schedule.pose_lr),
+                ] + 
+                [
+                    dict(params=self.graph.se3_refine[i:i+1].parameters(), lr=opt.schedule.pose_lr) for i in range(opt.schedule.init_num_images, len(self.train_data))
+                ]
+            )
+        else:
+            self.optim_pose = optimizer(
+                [
+                    dict(params=self.graph.se3_refine.parameters(), lr=opt.schedule.pose_lr),
+                ] 
+            )
         self.optim = optimizer([dict(params=self.graph.nerf.parameters(),lr=opt.optim.lr)])
 
     def train_iteration(self,opt,var,loader):
@@ -149,8 +165,12 @@ class Model(nerf.Model):
         loss = super().train_iteration(opt,var,loader)
         self.optim_pose.step()
         # update lr
-        for i, param_group in enumerate(self.optim_pose.param_groups):
-            param_group["lr"] = self.pose_lr_schedules[i](self.it)
+        if opt.schedule.multi_pose_lr_schedule:
+            for i, param_group in enumerate(self.optim_pose.param_groups):
+                param_group["lr"] = self.pose_lr_schedules[i](self.it)
+        else:
+            self.optim_pose.param_groups[0]["lr"] = self.pose_lr_schedule(self.it)
+
         self.optim.param_groups[0]["lr"] = self.nerf_scheduler(self.it)
 
         self.graph.nerf.progress.data.fill_(self.it/self.max_iters)
