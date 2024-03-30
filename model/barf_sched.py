@@ -248,7 +248,7 @@ class Model(nerf.Model):
             sim3 = camera.procrustes_analysis(center_GT,center_pred)
         except:
             print("warning: SVD did not converge...")
-            sim3 = edict(t0=0,t1=0,s0=1,s1=1,R=torch.eye(3,device=opt.device))
+            s_m3 = edict(t0=0,t1=0,s0=1,s1=1,R=torch.eye(3,device=opt.device))
         # align the camera poses
         center_aligned = (center_pred-sim3.t1)/sim3.s1@sim3.R.t()*sim3.s0+sim3.t0
         R_aligned = pose[...,:3]@sim3.R.t()
@@ -292,6 +292,12 @@ class Model(nerf.Model):
         optimizer = getattr(torch.optim,opt.optim.algo)
         optim_pose = optimizer([dict(params=[var.se3_refine_test],lr=opt.optim.lr_pose)])
         iterator = tqdm.trange(opt.optim.test_iter,desc="test-time optim.",leave=False,position=1)
+        # scheduler = getattr(torch.optim.lr_scheduler,opt.optim.sched_pose.type)
+        # if opt.optim.lr_pose_end:
+        #     assert(opt.optim.sched_pose.type=="ExponentialLR")
+        #     opt.optim.sched_pose.gamma = (opt.optim.lr_pose_end/opt.optim.lr_pose)**(1./opt.optim.test_iter)
+        # kwargs = { k:v for k,v in opt.optim.sched_pose.items() if k!="type" }
+        # sched_pose = scheduler(optim_pose,**kwargs)
         for it in iterator:
             optim_pose.zero_grad()
             var.pose_refine_test = camera.lie.se3_to_SE3(var.se3_refine_test)
@@ -301,6 +307,7 @@ class Model(nerf.Model):
             loss.all.backward()
             optim_pose.step()
             iterator.set_postfix(loss="{:.3f}".format(loss.all))
+            # sched_pose.step()
         return var
 
     @torch.no_grad()
@@ -317,16 +324,17 @@ class Model(nerf.Model):
                 except: continue
             # get the camera poses
             pose,pose_ref = self.get_all_training_poses(opt)
-            if opt.data.dataset in ["blender","llff"]:
-                pose_aligned,_ = self.prealign_cameras(opt,pose,pose_ref)
-                pose_aligned,pose_ref = pose_aligned.detach().cpu(),pose_ref.detach().cpu()
-                dict(
-                    blender=util_vis.plot_save_poses_blender,
-                    llff=util_vis.plot_save_poses,
-                )[opt.data.dataset](opt,fig,pose_aligned,pose_ref=pose_ref,path=cam_path,ep=ep)
-            else:
-                pose = pose.detach().cpu()
-                util_vis.plot_save_poses(opt,fig,pose,pose_ref=None,path=cam_path,ep=ep,cam_depth=0.2)
+            # if opt.data.dataset in ["blender","llff"]:
+            pose_aligned,_ = self.prealign_cameras(opt,pose,pose_ref)
+            pose_aligned,pose_ref = pose_aligned.detach().cpu(),pose_ref.detach().cpu()
+            dict(
+                blender=util_vis.plot_save_poses_blender,
+                llff=util_vis.plot_save_poses,
+                colmap=util_vis.plot_save_poses,
+            )[opt.data.dataset](opt,fig,pose_aligned,pose_ref=pose_ref,path=cam_path,ep=ep,cam_depth=0.2)
+            # else:
+            #     pose = pose.detach().cpu()
+            #     util_vis.plot_save_poses(opt,fig,pose,pose_ref=None,path=cam_path,ep=ep,cam_depth=0.2)
             ep_list.append(ep)
         plt.close()
         # write videos

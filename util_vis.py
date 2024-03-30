@@ -188,6 +188,10 @@ def plot_save_poses(opt,fig,pose,pose_ref=None,path=None,ep=None,cam_depth=None)
     x_min, x_max = cam[:, :, 0].min() - 0.3, cam[:, :, 0].max() + 0.3
     y_min, y_max = cam[:, :, 1].min() - 0.3, cam[:, :, 1].max() + 0.3
     z_min, z_max = cam[:, :, 2].min() - 0.3, cam[:, :, 2].max() + 0.3
+    if pose_ref is not None: # set bounds based on cam_ref
+        x_min, x_max = min(x_min,cam_ref[:, :, 0].min() - 0.3), max(x_max,cam_ref[:, :, 0].max() + 0.3)
+        y_min, y_max = min(y_min,cam_ref[:, :, 1].min() - 0.3), max(y_max,cam_ref[:, :, 1].max() + 0.3)
+        z_min, z_max = min(z_min,cam_ref[:, :, 2].min() - 0.3), max(z_max,cam_ref[:, :, 2].max() + 0.3)
     setup_3D_plot(ax1,elev=-90,azim=-90,lim=edict(x=(x_min,x_max),y=(y_min,y_max),z=(z_min,z_max)))
     setup_3D_plot(ax2,elev=0,azim=-90,lim=edict(x=(x_min,x_max),y=(y_min,y_max),z=(z_min,z_max)))
     ax1.set_title("forward-facing view",pad=0)
@@ -199,10 +203,11 @@ def plot_save_poses(opt,fig,pose,pose_ref=None,path=None,ep=None,cam_depth=None)
     color = plt.get_cmap("gist_rainbow")
     for i in range(N):
         if pose_ref is not None:
-            ax1.plot(cam_ref[i,:,0],cam_ref[i,:,1],cam_ref[i,:,2],color=(0.3,0.3,0.3),linewidth=1)
-            ax2.plot(cam_ref[i,:,0],cam_ref[i,:,1],cam_ref[i,:,2],color=(0.3,0.3,0.3),linewidth=1)
-            ax1.scatter(cam_ref[i,5,0],cam_ref[i,5,1],cam_ref[i,5,2],color=(0.3,0.3,0.3),s=40)
-            ax2.scatter(cam_ref[i,5,0],cam_ref[i,5,1],cam_ref[i,5,2],color=(0.3,0.3,0.3),s=40)
+            ax1.plot(cam_ref[i,:,0],cam_ref[i,:,1],cam_ref[i,:,2],color=(0.3,0.3,0.3,0.3),linewidth=1)
+            ax2.plot(cam_ref[i,:,0],cam_ref[i,:,1],cam_ref[i,:,2],color=(0.3,0.3,0.3,0.3),linewidth=1)
+            ax1.scatter(cam_ref[i,5,0],cam_ref[i,5,1],cam_ref[i,5,2],color=(0.3,0.3,0.3,0.3),s=40)
+            ax2.scatter(cam_ref[i,5,0],cam_ref[i,5,1],cam_ref[i,5,2],color=(0.3,0.3,0.3,0.3),s=40)
+    for i in range(N):
         c = np.array(color(float(i)/N))*0.8
         ax1.plot(cam[i,:,0],cam[i,:,1],cam[i,:,2],color=c)
         ax2.plot(cam[i,:,0],cam[i,:,1],cam[i,:,2],color=c)
