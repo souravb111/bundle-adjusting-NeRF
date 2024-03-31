@@ -73,6 +73,8 @@ class Model(nerf.Model):
             self.pose_lr_schedule = lambda it: opt.schedule.pose_lr * (opt.schedule.pose_lr_end / opt.schedule.pose_lr) ** (it / self.max_iters)
 
         start_finalize = self.max_iters - opt.schedule.finalize_num_iters
+        if not opt.optim.sched:
+            self.nerf_scheduler = lambda it: opt.optim.lr
         if opt.schedule.finalize_reset_nerf_lr:
             self.nerf_scheduler = lambda it, sf=start_finalize: opt.optim.lr * (opt.optim.lr_end / opt.optim.lr) ** (it / self.max_iters)  if it < sf else opt.optim.lr * (opt.optim.lr_end / opt.optim.lr) ** ((it - sf) / opt.schedule.finalize_num_iters)  
             opt.barf_c2f_start = (start_finalize + opt.schedule.finalize_num_iters * opt.barf_c2f[0]) / self.max_iters

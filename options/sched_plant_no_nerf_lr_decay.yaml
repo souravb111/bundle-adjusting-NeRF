@@ -15,7 +15,7 @@ schedule:
 
   # for ablations
   multi_pose_lr_schedule: True
-  multi_loss_weighting: False
+  multi_loss_weighting: True
 
 data:                                                       # data options
     root: 
@@ -25,7 +25,7 @@ data:                                                       # data options
     # subsample: 5
     val_ratio: 0.01
 
+barf_c2f: [0.1,0.5]
+
 optim:
   sched: False
-
-barf_c2f: [0.1,0.5]
